@@ -1,7 +1,7 @@
 name: Android preview
 on:
   push:
-    branches: [main, native/**]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 permissions:

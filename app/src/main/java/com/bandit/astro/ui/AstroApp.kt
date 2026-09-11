@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.LibraryBooks
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -44,9 +43,9 @@ import java.time.format.DateTimeFormatter
 
 private data class Destination(val name: String, val icon: ImageVector)
 private val destinations = listOf(
-    Destination("Orbit", Icons.Rounded.Home), Destination("Explore", Icons.Rounded.Explore),
-    Destination("Collection", Icons.AutoMirrored.Rounded.LibraryBooks), Destination("Schedule", Icons.Rounded.CalendarMonth),
-    Destination("Settings", Icons.Rounded.Tune)
+    Destination("Orbit", Icons.Rounded.Home), Destination("Explore", Icons.Rounded.Search),
+    Destination("Collection", Icons.Rounded.List), Destination("Schedule", Icons.Rounded.DateRange),
+    Destination("Settings", Icons.Rounded.Settings)
 )
 
 @Composable
@@ -82,7 +81,7 @@ fun AstroApp(model: AstroViewModel, notificationId: Int, consumed: () -> Unit) {
                     }
                 }, actions = {
                     if (detail.id == 0) AssistChip(onClick = { tab = 4 }, label = { Text("On device", fontSize = 11.sp) },
-                        leadingIcon = { Icon(Icons.Rounded.PhoneAndroid, null, Modifier.size(14.dp)) })
+                        leadingIcon = { Icon(Icons.Rounded.Phone, null, Modifier.size(14.dp)) })
                     Spacer(Modifier.width(12.dp))
                 })
             },
@@ -440,7 +439,7 @@ private fun MediaCard(media: Media, modifier: Modifier = Modifier, clicked: () -
 private fun Cover(url: String, description: String, modifier: Modifier, rounded: Boolean = true) {
     val shape = RoundedCornerShape(if (rounded) 14.dp else 0.dp)
     Box(modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-        Icon(Icons.Rounded.AutoAwesome, null, tint = MaterialTheme.colorScheme.primary.copy(alpha = .3f))
+        Icon(Icons.Rounded.Star, null, tint = MaterialTheme.colorScheme.primary.copy(alpha = .3f))
         AsyncImage(model = url.ifBlank { null }, contentDescription = description.ifBlank { null }, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
     }
 }
@@ -466,7 +465,7 @@ private fun Stat(value: String, label: String, modifier: Modifier) {
 private fun Notice(title: String, description: String, action: String? = null, clicked: () -> Unit = {}) {
     Surface(shape = RoundedCornerShape(22.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .4f))) {
         Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(Icons.Rounded.AutoAwesome, null, tint = MaterialTheme.colorScheme.primary)
+            Icon(Icons.Rounded.Star, null, tint = MaterialTheme.colorScheme.primary)
             Text(title, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, lineHeight = 20.sp)
             if (action != null) FilledTonalButton(onClick = clicked) { Text(action) }

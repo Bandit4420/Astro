@@ -12,7 +12,9 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.work.*
-import com.bandit.astro.*
+import com.bandit.astro.AstroApplication
+import com.bandit.astro.MainActivity
+import com.bandit.astro.R
 import com.bandit.astro.data.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
