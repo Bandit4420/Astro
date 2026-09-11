@@ -114,6 +114,7 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
     } }
     fun add(media: Media) = write { dao.add(media.asEntry()); _message.emit("Added to your local collection") }
     fun increment(id: Int) = write { dao.increment(id) }
+    fun decrement(id: Int) = write { dao.decrement(id) }
     fun remove(id: Int) = write { dao.remove(id); _message.emit("Removed from your local collection") }
     fun status(id: Int, value: String) = write { dao.status(id, value) }
     fun theme(value: String) = write { app.preferences.theme(value) }

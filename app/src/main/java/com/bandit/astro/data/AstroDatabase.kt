@@ -18,7 +18,9 @@ interface AstroDao {
     suspend fun remove(id: Int)
     @Query("UPDATE collection SET progress = CASE WHEN total > 0 THEN MIN(progress + 1, total) ELSE MIN(progress + 1, 2147483647) END, status = CASE WHEN total > 0 AND progress + 1 >= total THEN 'COMPLETED' ELSE 'CURRENT' END, updatedAt = :now WHERE mediaId = :id")
     suspend fun increment(id: Int, now: Long = System.currentTimeMillis())
-    @Query("UPDATE collection SET status = :status, updatedAt = :now WHERE mediaId = :id")
+    @Query("UPDATE collection SET progress = MAX(progress - 1, 0), status = CASE WHEN status = 'COMPLETED' THEN 'CURRENT' ELSE status END, updatedAt = :now WHERE mediaId = :id")
+    suspend fun decrement(id: Int, now: Long = System.currentTimeMillis())
+    @Query("UPDATE collection SET status = :status, progress = CASE WHEN :status = 'COMPLETED' AND total > 0 THEN total ELSE progress END, updatedAt = :now WHERE mediaId = :id")
     suspend fun status(id: Int, status: String, now: Long = System.currentTimeMillis())
     @Query("SELECT COUNT(*) FROM notified WHERE airingId = :id")
     suspend fun wasNotified(id: Int): Int

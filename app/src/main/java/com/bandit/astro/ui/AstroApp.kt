@@ -213,8 +213,13 @@ private fun EntryRow(entry: LibraryEntry, model: AstroViewModel) {
                 if (entry.total > 0) LinearProgressIndicator(progress = { (entry.progress.toFloat() / entry.total).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
                 Text(entry.status.pretty(), fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
             }
-            FilledTonalIconButton(onClick = { model.increment(entry.mediaId) }, enabled = entry.total <= 0 || entry.progress < entry.total) {
-                Icon(Icons.Rounded.Add, "Add one ${if (entry.type == "ANIME") "episode" else "chapter"} to ${entry.title}")
+            Column {
+                FilledTonalIconButton(onClick = { model.increment(entry.mediaId) }, enabled = entry.total <= 0 || entry.progress < entry.total) {
+                    Icon(Icons.Rounded.Add, "Add one ${if (entry.type == "ANIME") "episode" else "chapter"} to ${entry.title}")
+                }
+                IconButton(onClick = { model.decrement(entry.mediaId) }, enabled = entry.progress > 0) {
+                    Icon(Icons.Rounded.Remove, "Subtract one from ${entry.title}")
+                }
             }
         }
     }
