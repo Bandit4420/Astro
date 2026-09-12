@@ -38,7 +38,7 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
         if(user!=null) {
             if(user.banner.isNotBlank())item{Cover(user.banner,"Profile banner",Modifier.fillMaxWidth().height(140.dp))}
             item{SectionTitle(user.name,"AniList profile #${user.id}")}
-            item {Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Stat("${user.anime.optInt("minutesWatched")/60}h","watched",Modifier.weight(1f));Stat("${user.anime.optInt("episodesWatched")}","episodes",Modifier.weight(1f));Stat("${user.anime.optDouble("meanScore")}","mean score",Modifier.weight(1f))}}
+            item {Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Stat("${user.anime.optInt("minutesWatched")/60}h","watched",Modifier.weight(1f));Stat("${user.anime.optInt("episodesWatched")}","episodes",Modifier.weight(1f));Stat("${user.anime.optDouble("meanScore",0.0)}","mean score",Modifier.weight(1f))}}
             item {Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Stat("${user.manga.optInt("chaptersRead")}","chapters",Modifier.weight(1f));Stat("${user.manga.optInt("volumesRead")}","volumes",Modifier.weight(1f))}}
             item {SectionTitle("Anime genres");RankChart(user.anime.optJSONArray("genres")?.objects()?.map {it.text("genre") to it.optInt("count")} .orEmpty())}
             item {SectionTitle("Manga genres");RankChart(user.manga.optJSONArray("genres")?.objects()?.map {it.text("genre") to it.optInt("count")}.orEmpty())}
@@ -72,18 +72,21 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
     }
 }
 @Composable internal fun QuizScreen(m:AstroViewModel,p:Preferences) {
-    val pool by m.spotlight.collectAsStateWithLifecycle();val context=androidx.compose.ui.platform.LocalContext.current
-    val prefs=remember {context.getSharedPreferences("astro_quiz",0)}
+    val pool by m.quizPool.collectAsStateWithLifecycle();val loading by m.quizLoading.collectAsStateWithLifecycle();val account by m.account.collectAsStateWithLifecycle();var catalog by rememberSaveable{mutableStateOf(Catalog.ANIME)}
+    LaunchedEffect(catalog){m.loadQuizPool(catalog)}
+    val context=androidx.compose.ui.platform.LocalContext.current
+    val records=remember(account?.id) {QuizStore(context,account?.id ?: 0)}
     var mode by rememberSaveable{mutableStateOf("Cover")};var difficulty by rememberSaveable{mutableStateOf("Easy")}
     var rounds by remember {mutableStateOf<List<QuizRound>>(emptyList())};var index by rememberSaveable{mutableIntStateOf(0)};var answer by rememberSaveable{mutableStateOf("")};var score by rememberSaveable{mutableIntStateOf(0)}
-    var wins by remember{mutableIntStateOf(prefs.getInt("wins",0))};var streak by remember{mutableIntStateOf(prefs.getInt("streak",0))}
+    var wins by remember{mutableIntStateOf(records.wins())};var streak by remember{mutableIntStateOf(records.streak())}
     val done=rounds.isNotEmpty() && index>=rounds.size
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
         item {Chibi(Modifier.size(84.dp));SectionTitle("Anime Quiz","Guess stories from covers, clues or metadata. No plot trivia.")}
         if(rounds.isEmpty()) {
+            item {Row {Catalog.entries.forEach {c->FilterChip(selected=catalog==c,onClick={catalog=c},label={Text(c.label)})}}}
             item {Choice("Mode",mode,listOf("Cover","Clues","Trivia")){mode=it.ifBlank {"Cover"}};Choice("Difficulty",difficulty,listOf("Easy","Medium","Hard","Hashira")){difficulty=it.ifBlank {"Easy"}}}
-            item {Text("$wins quiz wins · $streak day streak");if(wins>=1)Text("🏆 First orbit mastered");if(wins>=10)Text("🌌 Ten quiz victories");if(wins>=100)Text("⚔ 100 trivia wins")}
-            item {Button(onClick={rounds=quizRounds(pool,mode,difficulty in listOf("Hard","Hashira"));index=0;answer="";score=0},enabled=pool.size>=4){Text(if(pool.size<4) "Waiting for AniList titles…" else "Start 10 rounds")}}
+            item {Text("$wins quiz wins · $streak day streak");if(wins>=1)Text("🏆 First orbit mastered");if(wins>=10)Text("🌌 Ten quiz victories");if(wins>=100)Text("⚔ 100 trivia wins");if(records.mastered()>=10)Text("🌌 10 universes mastered")}
+            item {Button(onClick={rounds=quizRounds(pool,mode,difficulty in listOf("Hard","Hashira"));index=0;answer="";score=0},enabled=pool.size>=4 && !loading){Text(if(pool.size<4 || loading) "Waiting for AniList titles…" else "Start 10 rounds")}}
         } else if(done) {
             item {SectionTitle("${score} / ${rounds.size}","Your knowledge this round: ${score*100/rounds.size}%");Button(onClick={rounds=emptyList();index=0}) {Text("Play again")}}
         } else {
@@ -94,8 +97,7 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
             items(round.choices){choice->OutlinedButton(onClick={if(answer.isBlank()){answer=choice;if(choice==round.answer)score++}},enabled=answer.isBlank(),modifier=Modifier.fillMaxWidth()){Text(choice)}}
             if(answer.isNotBlank())item {Text(if(answer==round.answer) "Correct! ✨" else "Answer: ${round.answer}",color=MaterialTheme.colorScheme.primary)
                 Button(onClick={index++;answer="";if(index>=rounds.size){
-                    if(score>=7){wins++;prefs.edit().putInt("wins",wins).apply()}
-                    val today=LocalDate.now().toEpochDay();val last=prefs.getLong("lastDay",0);if(today!=last){streak=if(last==today-1)streak+1 else 1;prefs.edit().putLong("lastDay",today).putInt("streak",streak).apply()}
+                    records.add(score,rounds.size,mode,difficulty,rounds.map {it.media.id});wins=records.wins();streak=records.streak()
                 }}) {Text(if(index==rounds.lastIndex) "See results" else "Next question")}}
         }
     }

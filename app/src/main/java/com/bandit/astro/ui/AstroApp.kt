@@ -126,7 +126,7 @@ internal fun OrbitScreen(library: List<LibraryEntry>, discovery: Discovery, mode
     val account by model.account.collectAsStateWithLifecycle()
     val spotlight by model.spotlight.collectAsStateWithLifecycle()
     val recommended by model.suggestions.collectAsStateWithLifecycle()
-    val current = library.filter { it.status == "CURRENT" }
+    val current = library.filter { it.status in listOf("CURRENT","REPEATING") }
     val minutes = library.filter { it.type == "ANIME" }.sumOf { it.progress.toLong() * it.duration }
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
         item { Column {
@@ -144,6 +144,7 @@ internal fun OrbitScreen(library: List<LibraryEntry>, discovery: Discovery, mode
         }
         item { OrbitToolsRow(tool) }
         item { TonightPanel(library,model) }
+        item { OrbitSummary(library,model) }
         item { SectionTitle("Continue your story", "Watching & reading now") }
         if (current.isEmpty()) item { Notice("Your orbit starts here", "Find a title, add it to your collection, then start tracking your episodes or chapters.", "Explore stories", explore) }
         items(current.take(12), key = { "continue-${it.mediaId}" }) { entry -> EntryRow(entry, model) }
@@ -214,7 +215,7 @@ internal fun CollectionScreen(library: List<LibraryEntry>, model: AstroViewModel
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { SectionTitle("Your collection", "${library.size} stories · changes saved on device") }
         item { LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(listOf("ALL", "CURRENT", "PLANNING", "COMPLETED", "PAUSED", "DROPPED")) { status ->
+            items(listOf("ALL", "CURRENT", "PLANNING", "COMPLETED", "PAUSED", "DROPPED", "REPEATING")) { status ->
                 FilterChip(selected = filter == status, onClick = { filter = status }, label = { Text(status.pretty()) })
             }
         } }
@@ -283,7 +284,7 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
             } else {
                 EntryRow(entry, model)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(listOf("PLANNING", "CURRENT", "PAUSED", "DROPPED", "COMPLETED")) { status ->
+                    items(listOf("PLANNING", "CURRENT", "PAUSED", "DROPPED", "REPEATING", "COMPLETED")) { status ->
                         FilterChip(selected = entry.status == status, onClick = { model.status(media.id, status) }, label = { Text(status.pretty()) })
                     }
                 }
@@ -352,7 +353,7 @@ internal fun PersonScreen(state: PersonState, cast: List<CastMember>, spoilers: 
             }
             if(!spoilers || revealed) {
                 item { SectionTitle("Other works") }
-                item { LazyRow(horizontalArrangement=Arrangement.spacedBy(14.dp)) { items(person.works,key={it.id}) { m -> MediaCard(m,Modifier.width(150.dp)) { model.open(m.id) } } }
+                item { LazyRow(horizontalArrangement=Arrangement.spacedBy(14.dp)) { items(person.works,key={it.id}) { m -> MediaCard(m,Modifier.width(150.dp)) { model.open(m.id) } } } }
                 if(person.more) item { TextButton(onClick={model.moreWorks()}) { Text("More works") } }
             }
             val actor = if (!state.staff) cast.firstOrNull { it.id == state.id && it.actorId > 0 } else null
@@ -379,6 +380,7 @@ internal fun ScheduleScreen(state: ScheduleState, library: List<LibraryEntry>, p
     LaunchedEffect(zone.id, monday) { model.refreshSchedule(zone,offset) }
     val date = monday.plusDays(selected.toLong())
     val ids = remember(library) { library.map { it.mediaId }.toSet() }
+    val now=rememberMinute()
     val episodes = state.items.filter { Instant.ofEpochSecond(it.airingAt).atZone(zone).toLocalDate() == date && (!onlyMine || it.media.id in ids) }
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { SectionTitle("This week in your universe", "${monday.format(DateTimeFormatter.ofPattern("d MMM"))} – ${monday.plusDays(6).format(DateTimeFormatter.ofPattern("d MMM"))} · ${zone.id}") }
@@ -405,7 +407,7 @@ internal fun ScheduleScreen(state: ScheduleState, library: List<LibraryEntry>, p
                     Cover(airing.media.cover, airing.media.title, Modifier.width(60.dp).height(88.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(airing.media.title, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text("Episode ${airing.episode}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Episode ${airing.episode} · ${countdown(airing.airingAt,now)}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(Instant.ofEpochSecond(airing.airingAt).atZone(zone).format(DateTimeFormatter.ofPattern("EEE, d MMM · h:mm a")),
                             fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                     }

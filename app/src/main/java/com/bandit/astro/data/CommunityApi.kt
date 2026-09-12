@@ -79,3 +79,9 @@ suspend fun AniListApi.studio(id: Int, page: Int, search: String, f: ExploreFilt
     }
     return CatalogPage(rows,d.getJSONObject("pageInfo").optBoolean("hasNextPage"))
 }
+
+suspend fun AniListApi.expandRelations(ids:List<Int>):List<Relation> {
+    if(ids.isEmpty())return emptyList()
+    val d=query("query(${'$'}ids:[Int]) { Page(perPage:40) { media(id_in:${'$'}ids,isAdult:false) { relations { edges { relationType node { ${AniListApi.MEDIA_FIELDS} isAdult } } } } } }",JSONObject().put("ids",JSONArray(ids)))
+    return d.getJSONObject("Page").getJSONArray("media").objects().flatMap {it.getJSONObject("relations").getJSONArray("edges").objects()}.mapNotNull {e->e.optJSONObject("node")?.takeUnless {it.optBoolean("isAdult")}?.let {Relation(AniListApi.parseMedia(it),e.text("relationType"))}}
+}

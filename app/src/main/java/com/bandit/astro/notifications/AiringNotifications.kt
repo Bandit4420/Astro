@@ -47,6 +47,7 @@ object AiringNotifications {
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val pending = PendingIntent.getActivity(context, airing.media.id, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(context, CHANNEL)
+            .setLargeIcon(android.graphics.BitmapFactory.decodeResource(context.resources,R.drawable.astro_mascot))
             .setSmallIcon(R.drawable.ic_notification).setContentTitle(airing.media.title)
             .setContentText("Episode ${airing.episode} has aired. Your next story is ready.")
             .setContentIntent(pending).setAutoCancel(true).setOnlyAlertOnce(true)

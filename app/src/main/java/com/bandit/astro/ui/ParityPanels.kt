@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.bandit.astro.*
+import com.bandit.astro.R
 import com.bandit.astro.data.*
 import kotlinx.coroutines.*
 import java.time.*
@@ -91,18 +92,19 @@ import java.time.*
         dismissButton={TextButton(onClick={confirm=""}) {Text("Cancel")}})
 }
 @Composable internal fun BackupPanel(m:AstroViewModel) {
-    val context=LocalContext.current;val scope=rememberCoroutineScope();var imported by remember {mutableStateOf<String?>(null)}
+    val context=LocalContext.current;val scope=rememberCoroutineScope();var imported by remember {mutableStateOf<String?>(null)};var webExport by rememberSaveable {mutableStateOf(false)}
     val save=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) {uri->if(uri!=null) scope.launch {
-        try {val text=m.backup();withContext(Dispatchers.IO) {context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use {it.write(text)} ?: error("Could not open backup file.")};m.announce("Backup exported")}
+        try {val text=m.backup(webExport);withContext(Dispatchers.IO) {context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use {it.write(text)} ?: error("Could not open backup file.")};m.announce("Backup exported")}
         catch(e:Exception){m.announce("Could not export backup: ${e.message}")}
     } }
     val load=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->if(uri!=null) scope.launch {try {
         imported=withContext(Dispatchers.IO) {context.contentResolver.openInputStream(uri)?.use {input-> val bytes=input.readNBytes(10_000_001);require(bytes.size<=10_000_000){"Backup exceeds 10 MB."};String(bytes,Charsets.UTF_8)} ?: error("Could not read backup.")}
     }catch(e:Exception){m.announce(e.message ?: "Could not read backup.")} } }
-    Column { SectionTitle("Keep your orbit safe");Text("Back up this account's collection, private notes and tracking history. Tokens are excluded.",fontSize=13.sp)
-        Row {TextButton(onClick={save.launch("Astro-backup.json")}) {Text("Export JSON")};TextButton(onClick={load.launch(arrayOf("application/json","text/plain"))}) {Text("Import JSON")}}
+    Column { SectionTitle("Keep your orbit safe");Text("Back up this account's collection, private notes, quiz records and tracking history. Tokens are excluded.",fontSize=13.sp)
+        TextButton(onClick={webExport=true;save.launch("Astro-website-backup.json")}) {Text("Export for the website")}
+        Row {TextButton(onClick={webExport=false;save.launch("Astro-backup.json")}) {Text("Export JSON")};TextButton(onClick={load.launch(arrayOf("application/json","text/plain"))}) {Text("Import JSON")}}
     }
-    if(imported!=null) AlertDialog(onDismissRequest={imported=null},title={Text("Import missing titles?")},text={Text("Existing progress is kept. Auto-sync will turn off so you can review imported entries. The backup must belong to this account.")},
+    if(imported!=null) AlertDialog(onDismissRequest={imported=null},title={Text("Import missing titles?")},text={Text("Existing progress is kept; empty notes can be filled. Auto-sync will turn off so you can review imported entries. The backup must belong to this account.")},
         confirmButton={TextButton(onClick={m.importBackup(imported!!);imported=null}) {Text("Import")}},dismissButton={TextButton(onClick={imported=null}) {Text("Cancel")}})
 }
 @Composable internal fun CalendarExport(rows:List<Airing>,m:AstroViewModel) {
@@ -145,7 +147,7 @@ import java.time.*
 @Composable internal fun StaffPanel(staff:List<Credit>,m:AstroViewModel) {var expanded by rememberSaveable(staff){mutableStateOf(false)}
     Column(verticalArrangement=Arrangement.spacedBy(10.dp)) {SectionTitle("Behind the story");staff.take(if(expanded) staff.size else 6).forEach {c->Row(Modifier.fillMaxWidth().clickable {m.openPerson(c.id,true)},verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {Cover(c.image,c.name,Modifier.size(42.dp));Column {Text(c.name,fontWeight=FontWeight.SemiBold);Text(c.role,fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)}}};if(staff.size>6)TextButton(onClick={expanded=!expanded}) {Text(if(expanded) "Show less" else "All ${staff.size} credits")}}
 }
-@Composable internal fun FranchisePanel(d:MediaDetail,m:AstroViewModel) {Column(verticalArrangement=Arrangement.spacedBy(10.dp)) {SectionTitle("Franchise timeline","Release year order · not an official watch order")
+@Composable internal fun FranchisePanel(d:MediaDetail,m:AstroViewModel) {Column(verticalArrangement=Arrangement.spacedBy(10.dp)) {SectionTitle("Franchise timeline","Release year order · not an official watch order");TextButton(onClick={m.expandFranchise()}) {Text("Expand connected stories")}
     (listOf(Relation(d.media,"THIS TITLE"))+d.relations).distinctBy {it.media.id}.sortedBy {it.media.year.takeIf {n->n>0} ?: Int.MAX_VALUE}.forEach {r->Row(Modifier.fillMaxWidth().clickable {m.open(r.media.id)},horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {Text(r.media.year.takeIf {it>0}?.toString() ?: "TBA",color=MaterialTheme.colorScheme.primary);Cover(r.media.cover,r.media.title,Modifier.width(40.dp).height(60.dp));Column(Modifier.weight(1f)){Text(r.media.title,fontWeight=FontWeight.SemiBold);Text(r.relation.pretty(),fontSize=11.sp)}}}
 }}
 @Composable internal fun TrackingExtras(e:LibraryEntry,media:Media,m:AstroViewModel) {
@@ -154,8 +156,9 @@ import java.time.*
         if(e.type=="MANGA") {SectionTitle("Reading progress");Text("${e.progress} chapters · ${e.volumes} / ${e.totalVolumes.takeIf {it>0} ?: "?"} volumes")
             Row {TextButton(onClick={m.increment(e.mediaId)}) {Text("+1 chapter")};TextButton(onClick={m.volumes(e.mediaId,1)}) {Text("+1 volume")};TextButton(onClick={m.volumes(e.mediaId,-1)},enabled=e.volumes>0) {Text("−1 volume")}}
         }
-        if(e.type=="ANIME") {SectionTitle("Catch-up calculator");val released=if(media.nextEpisode>0) media.nextEpisode-1 else if(media.status=="FINISHED") media.total else 0
+        if(e.type=="ANIME") {SectionTitle("Catch-up calculator");val released=if(media.nextEpisode>0) media.nextEpisode-(if(media.nextAiring>Instant.now().epochSecond) 1 else 0) else if(media.status=="FINISHED") media.total else 0
             if(released>0) {val behind=(released-e.progress).coerceAtLeast(0);Text("$behind episodes behind · ${kotlin.math.ceil(behind/pace).toInt()} days at ${pace.toInt()}/day");Slider(pace,{pace=it},valueRange=1f..10f,steps=8);Text("${behind*(media.duration.takeIf {it>0} ?: 24)} minutes${if(media.duration<=0) " (24 min/episode estimate)" else ""}",fontSize=12.sp)} else Text("Waiting for a published airing schedule or finished episode total.",fontSize=13.sp)
+            if(media.nextAiring>Instant.now().epochSecond && released>e.progress) {val days=(media.nextAiring-Instant.now().epochSecond)/86400.0;Text("Aim for ${kotlin.math.ceil((released-e.progress)/days).toInt()} episodes/day to catch up before episode ${media.nextEpisode}.",fontSize=12.sp)}
         }
         Text("Your score · ${rating.toInt()} / 100 (0 = unrated)");Slider(rating,{rating=it},onValueChangeFinished={m.score(e.mediaId,rating.toInt())},valueRange=0f..100f)
         SectionTitle("Private notes","Saved only in this account's device library")
@@ -169,3 +172,15 @@ import java.time.*
 }
 @Composable internal fun rememberMinute():Long {var now by remember{mutableLongStateOf(Instant.now().epochSecond)};LaunchedEffect(Unit){while(true){delay(60000);now=Instant.now().epochSecond}};return now}
 internal fun countdown(at:Long,now:Long):String {val seconds=at-now;return if(seconds<=0)"Already aired" else "Airs in ${seconds/86400}d ${(seconds%86400)/3600}h ${(seconds%3600)/60}m"}
+
+@Composable internal fun OrbitSummary(entries:List<LibraryEntry>,m:AstroViewModel) {
+    val now=rememberMinute();val current=entries.filter {it.status in listOf("CURRENT","REPEATING") && it.type=="ANIME"};val known=current.filter {it.total>0}
+    val total=known.sumOf {it.total.toLong()};val watched=known.sumOf {it.progress.coerceAtMost(it.total).toLong()}
+    val behind=current.sumOf {if(it.nextEpisode>0) (it.nextEpisode-(if(it.nextAiring>now) 1 else 0)-it.progress).coerceAtLeast(0) else 0}
+    Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        SectionTitle("Your orbit")
+        Text("$behind known aired episodes to catch up · ${if(total>0) "${watched*100/total}%" else "—"} through current shows")
+        if(total>0)LinearProgressIndicator(progress={watched.toFloat()/total},modifier=Modifier.fillMaxWidth())
+        Text("Manga update times aren't published by AniList. Track chapters and volumes from your collection.",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}

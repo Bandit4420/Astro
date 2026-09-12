@@ -28,9 +28,14 @@ fun quizRounds(pool: List<Media>, mode: String, hard: Boolean): List<QuizRound> 
         val others=unique.filter { it.id!=m.id }.shuffled().let { rows -> if(hard) rows.sortedByDescending { n -> n.genres.count { it in m.genres } } else rows }
         val clues=listOf("Genres: ${m.genres.joinToString()}","Debut: ${m.year.takeIf { it>0 } ?: "Unknown"}","Format: ${m.format}","Studios: ${m.studios.joinToString().ifBlank { "Not listed" }}")
         if(mode=="Trivia") {
-            val answer=m.format.ifBlank { m.type }
-            val formats=(listOf(answer)+listOf("TV","MOVIE","MANGA","NOVEL","OVA","ONA","ONE_SHOT").filter { it!=answer }.shuffled().take(3)).shuffled()
-            QuizRound(m,"${m.title} — What format is this title?",formats,answer,emptyList())
+            data class Question(val prompt:String,val answer:String,val decoys:List<String>)
+            val questions=mutableListOf(Question("What format is this title?",m.format.ifBlank {m.type},listOf("TV","MOVIE","MANGA","NOVEL","OVA","ONA","ONE_SHOT")))
+            if(m.year>0)questions+=Question("In which year did this entry first release?",m.year.toString(),listOf(m.year-2,m.year+1,m.year-5).map {it.toString()})
+            if(m.genres.isNotEmpty())questions+=Question("Which genre is listed for this title?",m.genres.first(),listOf("Action","Adventure","Comedy","Drama","Fantasy","Horror","Music","Mystery","Romance","Sci-Fi","Sports").filter {it !in m.genres})
+            val count=if(m.format=="NOVEL")m.volumes else m.total
+            if(count>0)questions+=Question("How many ${if(m.format=="NOVEL") "volumes" else m.unit+"s"} are listed for this entry?",count.toString(),listOf(count+2,(count-3).coerceAtLeast(1),count+12,count+7).map {it.toString()})
+            val q=questions.random();val choices=(listOf(q.answer)+q.decoys.filter {it!=q.answer}.distinct().shuffled().take(3)).shuffled()
+            QuizRound(m,"${m.title} — ${q.prompt}",choices,q.answer,emptyList())
         } else QuizRound(m,if(mode=="Cover") "Which story is hiding in this cover?" else "Which title fits these clues?",(listOf(m.title)+others.take(3).map { it.title }).shuffled(),m.title,clues)
     }
 }
@@ -46,7 +51,8 @@ fun backupJson(owner: Int, entries: List<LibraryEntry>, history: List<HistoryEve
     .put("history",JSONArray(history.map { e -> JSONObject().put("id",e.id).put("mediaId",e.mediaId).put("at",e.at).put("delta",e.delta).put("unit",e.unit).put("minutes",e.minutes) })).toString(2)
 fun parseBackup(text: String, owner: Int): Pair<List<LibraryEntry>,List<HistoryEvent>> {
     require(text.length<=10_000_000) { "Backup exceeds 10 MB." }
-    val d=JSONObject(text)
+    val initial=JSONObject(text)
+    val d=if(initial.optString("app")=="astro") JSONObject(fromWebBackup(text,owner)) else initial
     require(d.optString("format")=="astro-native" && d.optInt("version")==1) { "Use an Astro Android JSON backup." }
     require(d.getInt("owner")==owner) { "This backup belongs to a different account. Switch to its account before importing." }
     val rows=d.getJSONArray("entries");require(rows.length()<=20000)

@@ -33,6 +33,8 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
     val profile = MutableStateFlow<UserProfile?>(null)
     val profileError = MutableStateFlow("")
     val spotlight = MutableStateFlow<List<Media>>(emptyList())
+    val quizPool = MutableStateFlow<List<Media>>(emptyList())
+    val quizLoading = MutableStateFlow(false)
     val suggestions = MutableStateFlow<Pair<String,List<Media>>>("" to emptyList())
     val songs = MutableStateFlow<Pair<List<Song>,List<Song>>?>(null)
     val songsError = MutableStateFlow("")
@@ -107,7 +109,7 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
             catch (e: Exception) { _detail.value = _detail.value.copy(loading = false, error = friendly(e)) }
         }
     }
-    fun closeDetail() { detailJob?.cancel(); castJob?.cancel(); castLoading.value=false; songsJob?.cancel(); songs.value=null; songsError.value=""; songsLoading.value=false; closePerson(); _detail.value = DetailState() }
+    fun closeDetail() { detailJob?.cancel(); castJob?.cancel(); castLoading.value=false; songsJob?.cancel(); songs.value=null; songsError.value=""; songsLoading.value=false; castJob?.cancel();songsJob?.cancel(); closePerson(); _detail.value = DetailState() }
     fun openPerson(id: Int, staff: Boolean) {
         personJob?.cancel(); _person.value = PersonState(id, staff)
         personJob = viewModelScope.launch {
@@ -192,6 +194,9 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
             if(_detail.value.id==d.media.id) _detail.value=_detail.value.copy(value=d.copy(characters=(d.characters+rows).distinctBy { it.id },castPage=d.castPage+1,moreCast=more))
         } catch(e:CancellationException){throw e} catch(e:Exception){announce(e.message ?: "Could not load more characters.")} finally {castLoading.value=false} }
     }
+    fun expandFranchise() {val d=_detail.value.value ?: return
+        task {val relations=app.api.expandRelations(d.relations.map {it.media.id}.take(40));if(_detail.value.id==d.media.id)_detail.value=_detail.value.copy(value=_detail.value.value?.copy(relations=(d.relations+relations).distinctBy {it.media.id}));announce("Connected titles expanded")}
+    }
     fun moreWorks() { val s=_person.value ?: return;val p=s.value ?: return; if(!p.more)return
         personJob?.cancel();personJob=viewModelScope.launch { try { val n=app.api.person(s.id,s.staff,p.page+1);_person.value=s.copy(value=n.copy(works=(p.works+n.works).distinctBy { it.id })) }
         catch(e:CancellationException){throw e} catch(e:Exception){announce(e.message ?: "Could not load works.")} }
@@ -213,12 +218,18 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
         compareJob=viewModelScope.launch { try { val p=app.api.profile(name.trim());val entries=app.api.remoteList(p.id);if((account.value?.id ?: 0)==owner) comparison.value=p to entries.map { it.entry } }
             catch(e:CancellationException){throw e} catch(e:Exception){comparisonError.value=e.message ?: "Could not compare this public profile."} }
     }
-    suspend fun backup():String { val owner=account.value?.id ?: 0;val db=app.databaseFor(owner);return db.withTransaction { backupJson(owner,db.dao().entries(),db.dao().history()) } }
+    fun loadQuizPool(catalog:Catalog) { task { quizLoading.value=true;try {quizPool.value=app.api.discover(catalog,"",1).media} finally {quizLoading.value=false} } }
+    suspend fun backup(web:Boolean=false):String { val owner=account.value?.id ?: 0;val db=app.databaseFor(owner)
+        val data=db.withTransaction { JSONObject(backupJson(owner,db.dao().entries(),db.dao().history())).put("quiz",QuizStore(app,owner).records()).toString(2) }
+        return if(web) toWebBackup(data) else data
+    }
     fun importBackup(text:String)=task {
         val owner=account.value?.id ?: 0;val (entries,events)=parseBackup(text,owner);val db=app.databaseFor(owner)
         app.preferences.flag("autoSync",false)
-        db.withTransaction { for(e in entries) { val old=db.dao().entry(e.mediaId); if(old==null) db.dao().put(e) }; for(e in events) db.dao().event(e) }
-        announce("Imported missing titles and history. Existing progress kept; auto-sync is off for review.")
+        db.withTransaction { for(e in entries) { val old=db.dao().entry(e.mediaId); if(old==null) db.dao().put(e) else if(old.notes.isBlank() && e.notes.isNotBlank()) db.dao().put(old.copy(notes=e.notes)) }; for(e in events) db.dao().event(e) }
+        val imported=JSONObject(if(JSONObject(text).optString("app")=="astro") fromWebBackup(text,owner) else text)
+        QuizStore(app,owner).merge(imported.optJSONArray("quiz") ?: org.json.JSONArray())
+        announce("Imported missing titles, notes, quiz and history. Existing progress kept; auto-sync is off for review.")
     }
     private fun friendly(e:Exception)=if(e is ApiException) e.message ?: "AniList is unavailable." else "Couldn't connect. Check your connection and try again."
 }

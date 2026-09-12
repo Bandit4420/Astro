@@ -54,4 +54,9 @@ class ParityPolicyTest {
             try{parseBackup(invalid,0);fail("Invalid backup accepted")}catch(_:IllegalArgumentException){}
         }
     }
+    @Test fun `website backups preserve account notes progress and ratings`() {
+        val original=backupJson(44,listOf(entry().copy(score=85,notes="Keep me")),emptyList())
+        val web=toWebBackup(original);val imported=parseBackup(web,44).first.single()
+        assertEquals(85,imported.score);assertEquals(10,imported.progress);assertEquals("Keep me",imported.notes)
+    }
 }
