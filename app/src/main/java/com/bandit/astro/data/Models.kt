@@ -11,13 +11,18 @@ data class Media(
     val format: String = "", val status: String = "", val description: String = "",
     val total: Int = 0, val duration: Int = 0, val score: Int = 0, val year: Int = 0,
     val genres: List<String> = emptyList(), val nextEpisode: Int = 0, val nextAiring: Long = 0,
-    val trailerId: String = "", val trailerSite: String = ""
+    val trailerId: String = "", val trailerSite: String = "", val malId: Int = 0,
+    val volumes: Int = 0, val studios: List<String> = emptyList()
 ) { val unit: String get() = if (type == "ANIME") "episode" else "chapter" }
 
 data class CastMember(val id: Int, val name: String, val image: String, val role: String,
     val actorName: String, val actorId: Int, val actorImage: String)
-data class MediaDetail(val media: Media, val characters: List<CastMember>)
-data class Person(val name: String, val image: String, val description: String)
+data class Credit(val id: Int, val name: String, val image: String, val role: String)
+data class Relation(val media: Media, val relation: String)
+data class MediaDetail(val media: Media, val characters: List<CastMember>, val castPage: Int = 1,
+    val moreCast: Boolean = false, val staff: List<Credit> = emptyList(), val relations: List<Relation> = emptyList(),
+    val recommendations: List<Media> = emptyList())
+data class Person(val name: String, val image: String, val description: String, val works: List<Media> = emptyList(), val page: Int = 1, val more: Boolean = false)
 data class CatalogPage(val media: List<Media>, val hasNext: Boolean)
 data class Airing(val id: Int, val episode: Int, val airingAt: Long, val media: Media)
 
@@ -32,12 +37,16 @@ data class LibraryEntry(
     val duration: Int,
     val progress: Int = 0,
     val status: String = "PLANNING",
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val volumes: Int = 0, val totalVolumes: Int = 0, val score: Int = 0, val notes: String = "",
+    val genres: String = "", val studios: String = "", val nextEpisode: Int = 0, val nextAiring: Long = 0,
+    val dirty: Boolean = true, val deleted: Boolean = false, val revision: Long = 1,
+    val remoteUpdated: Long = 0
 )
 
-fun Media.asEntry() = LibraryEntry(id, title, cover, type, format, total, duration)
+fun Media.asEntry() = LibraryEntry(id, title, cover, type, format, total, duration, totalVolumes = volumes, genres = genres.joinToString("|"), studios = studios.joinToString("|"), nextEpisode = nextEpisode, nextAiring = nextAiring)
 fun LibraryEntry.asMedia() = Media(id = mediaId, title = title, cover = cover, type = type,
-    format = format, total = total, duration = duration)
+    format = format, total = total, duration = duration, volumes = totalVolumes, genres = genres.split("|").filter { it.isNotBlank() }, studios = studios.split("|").filter { it.isNotBlank() }, nextEpisode = nextEpisode, nextAiring = nextAiring)
 
 // Clamp only when AniList publishes a known total. Unknown totals must remain trackable.
 fun nextProgress(current: Int, total: Int): Int =

@@ -62,7 +62,8 @@ class AiringWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     override suspend fun doWork(): Result {
         val app = applicationContext as AstroApplication
         if (!app.preferences.flow.first().reminders || !AiringNotifications.allowed(app)) return Result.success()
-        val dao = app.database.dao()
+        val owner = app.account.session.value?.id ?: 0
+        val dao = app.databaseFor(owner).dao()
         val collection = dao.entries().filter { it.type == "ANIME" && it.status == "CURRENT" }.associateBy { it.mediaId }
         if (collection.isEmpty()) return Result.success()
         val now = System.currentTimeMillis() / 1000
@@ -73,7 +74,7 @@ class AiringWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                     val (episodes, more) = app.api.schedule(now - 6 * 3600 - 1, now + 1, page, ids)
                     for (airing in episodes) {
                         // Re-read progress and preferences: the user can change them during this request.
-                        if (!app.preferences.flow.first().reminders) return Result.success()
+                        if ((app.account.session.value?.id ?: 0) != owner || !app.preferences.flow.first().reminders) return Result.success()
                         val entry = dao.entries().firstOrNull { it.mediaId == airing.media.id } ?: continue
                         if (entry.status != "CURRENT" || !episodeIsDue(airing.airingAt, now, entry.progress, airing.episode)) continue
                         if (dao.wasNotified(airing.id) == 0 && AiringNotifications.send(app, airing))
