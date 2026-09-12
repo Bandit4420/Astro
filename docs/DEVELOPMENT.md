@@ -14,7 +14,7 @@ The APK is generated at `app/build/outputs/apk/debug/app-debug.apk`. The package
 
 ## GitHub builds
 
-The **Android preview** workflow tests, lints and builds the debug APK on branch pushes, pull requests, or a manual run. A successful run uploads the APK, SHA-256 checksum, test/lint reports, and generated Room schema. Download artifacts while signed into a GitHub account with access to this private repository. Artifacts expire after 14 days.
+The **Android preview** workflow tests, lints and builds the debug APK on main-branch pushes, pull requests, or a manual run. A successful run uploads the APK, SHA-256 checksum, test/lint reports, and generated Room schema. Download artifacts while signed into a GitHub account with access to this private repository. Artifacts expire after 14 days.
 
 CI uses a temporary Android debug signing identity. APKs from separate clean runners may require an uninstall before installation, which deletes local progress. Do not rely on preview builds as your only collection backup. Persistent release signing and export/import must be implemented before migration from the web app.
 

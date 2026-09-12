@@ -20,7 +20,7 @@ A native Android home for your stories. Built for the small moments between epis
 
 Astro is moving from the web into native Android: midnight-black screens, artwork-inspired accents, quick progress updates, and notifications that belong on your phone.
 
-**Status: first native preview source implemented; build verification in progress.** This is an early local-tracking app. AniList account login and sync are the next milestone, and a production APK has not been released. The working website remains separate.
+**Status: first native preview built successfully in CI.** This is an early local-tracking app. AniList account login and sync are the next milestone, and a production APK has not been released. The working website remains separate.
 
 ## In this native preview
 
@@ -43,6 +43,8 @@ Artwork caches have explicit limits. Search is debounced, obsolete requests canc
 
 ## Try a development build
 
+**[Download the verified preview APK ZIP](https://github.com/Bandit4420/Astro/actions/runs/34679645728/artifacts/10293957109)** · [Build verification](docs/BUILD_VERIFICATION.md)
+
 Open [GitHub Actions](https://github.com/Bandit4420/Astro/actions), select a **successful Android preview run**, and download its APK artifact. Extract the ZIP to find `app-debug.apk` and its SHA-256 checksum. Private repository access is required. The presence of workflow source alone does not mean a successful APK is available.
 
 These are debug builds with temporary signing identities; a later build may require uninstalling the old one and losing its local data. Keep your main collection on AniList/the web edition while native account sync and backup are being built.
@@ -62,7 +64,8 @@ Requires JDK 17 and Android SDK 35. See [development notes](docs/DEVELOPMENT.md)
 - [x] Public AniList browsing and local collection tracking.
 - [x] Weekly schedule and opt-in system reminder implementation.
 - [x] Gradle wrapper and Android CI workflow source.
-- [ ] Verify the first APK build and test on Android devices.
+- [x] Compile the first APK, pass six unit tests, and finish lint with no errors.
+- [ ] Test installation, screens and reminders on Android devices.
 - [ ] Secure AniList login, account separation and durable auto-sync.
 - [ ] Port OP/ED credits, quiz, advanced filters, chibi notices and remaining web features.
 - [ ] Backup/export, accessibility checks and measured battery/memory profiling.
