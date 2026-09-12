@@ -22,6 +22,8 @@ jobs:
           java-version: '17'
       - name: Set up Gradle and validate wrapper
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event.pull_request.head.repo.fork == true }}
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
       - name: Install Android SDK components

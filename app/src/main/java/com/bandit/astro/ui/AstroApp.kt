@@ -217,7 +217,7 @@ private fun EntryRow(entry: LibraryEntry, model: AstroViewModel) {
                     Icon(Icons.Rounded.Add, "Add one ${if (entry.type == "ANIME") "episode" else "chapter"} to ${entry.title}")
                 }
                 IconButton(onClick = { model.decrement(entry.mediaId) }, enabled = entry.progress > 0) {
-                    Icon(Icons.Rounded.Remove, "Subtract one from ${entry.title}")
+                    Text("−1", fontSize = 14.sp)
                 }
             }
         }
