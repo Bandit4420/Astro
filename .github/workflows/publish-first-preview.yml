@@ -1,0 +1,64 @@
+name: Publish verified native preview
+on:
+  push:
+    branches: [release/native-preview-0.1.0]
+permissions:
+  contents: read
+concurrency:
+  group: publish-native-preview-0.1.0
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: v0.1.0-preview
+      SOURCE_SHA: 149b6589aa0b2b995f17548b4b41ffdfc8b7d546
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify original build and repository visibility
+        run: |
+          gh api "repos/$GH_REPO/actions/runs/34679645728" > build.json
+          gh api "repos/$GH_REPO" > repository.json
+          python - <<'PY'
+          import json, os
+          run = json.load(open('build.json'))
+          repo = json.load(open('repository.json'))
+          assert repo['private'] is True, 'Expected private repository'
+          assert run['status'] == 'completed' and run['conclusion'] == 'success'
+          assert run['head_sha'] == os.environ['SOURCE_SHA'], 'Unexpected build source'
+          PY
+      - name: Download the tested APK without rebuilding
+        run: gh run download 34679645728 --name Astro-Android-12-plus-preview-8 --dir release-assets
+      - name: Verify and name release assets
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, zipfile
+          folder = Path('release-assets')
+          apk = folder / 'app-debug.apk'
+          expected = 'b393d8dc805aa96fab12183ac16b2764e1df1ebe2c2467ffeef2c1e37bac98d6'
+          assert hashlib.sha256(apk.read_bytes()).hexdigest() == expected
+          assert (folder / 'app-debug.apk.sha256').read_text().split()[0] == expected
+          with zipfile.ZipFile(apk) as archive:
+              assert archive.testzip() is None
+          named = folder / 'Astro-0.1.0-preview.apk'
+          apk.rename(named)
+          named.with_suffix('.apk.sha256').write_text(expected + '  ' + named.name + '\n')
+          PY
+      - name: Upload complete draft and publish prerelease
+        run: |
+          gh release create "$RELEASE_TAG" \
+            release-assets/Astro-0.1.0-preview.apk \
+            release-assets/Astro-0.1.0-preview.apk.sha256 \
+            --target "$SOURCE_SHA" --draft --prerelease \
+            --title 'Astro Android 0.1.0 — Native Preview' \
+            --notes-file docs/releases/v0.1.0-preview.md
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
