@@ -12,15 +12,15 @@ The 0.2 preview ports the main website workflows to native Kotlin/Compose. This 
 | Collection | Episode/chapter/volume +/- controls, ratings, status, private notes | Initial remote imports don't fabricate historical viewing events |
 | Schedule | Local/IST, previous/next weeks, Only My Anime, calendar export | Broadcast time is not streaming availability |
 | Profiles | Account avatar, about images, hours/episodes/chapters/volumes and genre charts | Signed-in account statistics require configured login |
-| Details | Paginated main→support cast, actors, biographies/works, combined OP/ED below cast, coverage counts, compact staff, relations, trailers | Franchise currently direct relations; no two-hop expansion yet |
+| Details | Paginated main→support cast, actors, biographies/works, combined OP/ED below cast, coverage counts, compact staff, relations, trailers | Includes direct relations and one further connection; dates may be incomplete |
 | Themes | 12 presets, dynamic accent, opacity, decorative backdrop blur, radius, cover size, image transitions, artwork toggle | Native material navigation surfaces aren't CSS backdrop filters; phone visual review pending |
 | Spoiler protection | Manual reveals for synopsis, cast, biographies, relations | AniList has no reliable episode-safe boundaries |
-| Quiz | Separate cover/clue/format trivia screen, difficulty, scores, streak, milestones | Metadata trivia is narrower than the website's question pool; uses trending anime pool |
+| Quiz | Separate cover/clue/format trivia screen, difficulty, scores, streak, milestones | Metadata questions include genre, year, format and length; pools for anime, manga and novels |
 | Stats / Wrapped | Status/genre/studio bars, recorded history, monthly/yearly recap, weekday patterns | App-recorded changes only; no invented historical totals |
 | Roulette / compatibility | Planned titles filtered by genre/time; public account comparison and shared rating differences | Comparison percentage is explicitly an agreement heuristic |
 | Constellations | Up to 100 stars, genre groups, rating size, shared-genre links and accessible title list | Layout is bounded and static to save battery |
 | Notifications | Chibi in-app notices; native scheduled episode reminders | System delivery still needs phone verification; OS controls notification layout |
-| Backup | Account-bound JSON collection/notes/history, merge missing entries only, tokens excluded | Native backup format; web JSON conversion not yet implemented |
+| Backup | Account-bound JSON collection/notes/history/quiz, web/native import/export, merge missing titles and fill empty notes only, tokens excluded | Web score conversion 0–10 ↔ 0–100; invalid/cross-account backups rejected |
 | Installability | Native Android 12+ APK | PWA is replaced by native installation |
 
 ## Remaining release gates
@@ -29,6 +29,6 @@ The 0.2 preview ports the main website workflows to native Kotlin/Compose. This 
 - Establish stable release signing. CI debug keys may change between builds. Do not uninstall the first preview if its local progress matters; export/migrate before a destructive reinstall.
 - Exercise Room v1→v2 migration and UI on emulator/phone; verify notifications on Android 12 and Android 13+.
 - Measure startup, scrolling, image memory budget and idle battery; compare glass on/off on OnePlus Nord 5.
-- Complete native/web backup interoperability, extended franchise expansion, broader quiz modes, richer recommendations and visual refinements.
+- Refine visual parity and recommendations after real account/device review.
 
 No account access, stable signing, device QA or full parity is implied solely by a successful APK build.

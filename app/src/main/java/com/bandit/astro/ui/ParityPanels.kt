@@ -98,7 +98,9 @@ import java.time.*
         catch(e:Exception){m.announce("Could not export backup: ${e.message}")}
     } }
     val load=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->if(uri!=null) scope.launch {try {
-        imported=withContext(Dispatchers.IO) {context.contentResolver.openInputStream(uri)?.use {input-> val bytes=input.readNBytes(10_000_001);require(bytes.size<=10_000_000){"Backup exceeds 10 MB."};String(bytes,Charsets.UTF_8)} ?: error("Could not read backup.")}
+        imported=withContext(Dispatchers.IO) {context.contentResolver.openInputStream(uri)?.use {input-> val output=java.io.ByteArrayOutputStream();val buffer=ByteArray(8192)
+            while(true){val count=input.read(buffer);if(count<0)break;require(output.size()+count<=10_000_000){"Backup exceeds 10 MB."};output.write(buffer,0,count)}
+            output.toString("UTF-8")} ?: error("Could not read backup.")}
     }catch(e:Exception){m.announce(e.message ?: "Could not read backup.")} } }
     Column { SectionTitle("Keep your orbit safe");Text("Back up this account's collection, private notes, quiz records and tracking history. Tokens are excluded.",fontSize=13.sp)
         TextButton(onClick={webExport=true;save.launch("Astro-website-backup.json")}) {Text("Export for the website")}

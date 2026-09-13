@@ -16,18 +16,18 @@ The APK is generated at `app/build/outputs/apk/debug/app-debug.apk`. The package
 
 The **Android preview** workflow tests, lints and builds the debug APK on main-branch pushes, pull requests, or a manual run. A successful run uploads the APK, SHA-256 checksum, test/lint reports, and generated Room schema. Download artifacts while signed into a GitHub account with access to this private repository. Artifacts expire after 14 days.
 
-CI uses a temporary Android debug signing identity. APKs from separate clean runners may require an uninstall before installation, which deletes local progress. Do not rely on preview builds as your only collection backup. Persistent release signing and export/import must be implemented before migration from the web app.
+CI uses a temporary Android debug signing identity. APKs from separate clean runners may require an uninstall before installation, which deletes local progress. Do not rely on preview builds as your only collection backup. Export a backup from the installed build before moving between differently signed builds. Version 0.1 has no export UI: retain that installation if its data matters until a safe migration is available. Stable release signing remains a release gate.
 
 No signing keys, account tokens, passwords, or AniList client secret belong in Git.
 
 ## Data and power
 
-- The preview calls AniList's public GraphQL API. It does not impersonate a username or modify an AniList account.
-- Room holds local collection entries and notification deduplication. Increment updates are atomic SQL operations.
+- Public browsing is anonymous. Mutations require browser OAuth, verified Viewer ownership and an unexpired encrypted session. See ANILIST_ANDROID.md for client setup.
+- Each account has its own Room database, plus the original guest database. Local edits are transactional, with durable dirty records and revision-based sync acknowledgements. Private notes are excluded from remote mutations.
 - DataStore stores theme, spoiler, timezone, and reminder preferences.
 - Discovery loads 20 titles at a time up to 80, with a 350 ms search debounce and cancellation.
 - The detail cache retains 12 titles. Coil's disk cache is capped at 64 MB and its memory cache at 12% of the app's memory budget.
-- An hourly WorkManager request is registered only when the user enables reminders. It uses a connected-network constraint, retries transient failures with backoff, and checks the preceding six hours of releases for currently watching titles.
+- An hourly WorkManager request is registered only when the user enables reminders or account auto-sync. It uses a connected-network constraint, retries transient failures with backoff, and checks the preceding six hours of releases for currently watching titles.
 - Alerts are approximate, not exact alarms. No persistent service, exact-alarm permission, foreground polling, analytics or advertising SDK is added.
 - Notification taps open the matching title through an explicit, immutable PendingIntent. Permission is requested on Android 13+ when enabling reminders.
 - Runtime statistics use only known AniList durations. They are local tracked runtime, not verified viewing time.
@@ -36,9 +36,11 @@ No signing keys, account tokens, passwords, or AniList client secret belong in G
 
 AniList has no dependable episode-by-episode spoiler boundaries. Protection conservatively hides descriptions, cast and biographies. Reveals are scoped to the current title/person visit and reset when protection changes.
 
-This is a first native milestone, not full parity with the website. Secure AniList OAuth and sync, OP/ED credits, advanced discovery filters, quiz, constellation, Wrapped, local backup, chibi artwork, and glass rendering remain to be ported. Character details currently show the first 25 cast members. Trailers open in the installed YouTube app or browser.
+This is a native parity preview. OP/ED credits, paginated cast, profiles, advanced filters, quiz, constellation, Wrapped, web/native backup conversion, chibi notices and appearance controls are implemented. See [PARITY.md](PARITY.md) for limits. Trailers open in the installed YouTube app or browser.
 
-Before account sync: register a dedicated native OAuth client/callback without changing the website callback, verify Viewer ownership, store credentials with Android Keystore protection, partition Room records by account, and add a durable revision-aware outgoing queue. Do not silently upload the local preview collection after login.
+AniList's native OAuth client must be registered separately for `astro://oauth/anilist`; the website callback stays unchanged. Guest data is never silently uploaded to a newly signed-in account.
+
+The `Android device checks` workflow exercises v1→v2 migration, concurrent sync acknowledgements and primary navigation on an Android 12 emulator. Successful CI is separate from live account testing and physical-device battery measurements.
 
 ## Device acceptance before release
 

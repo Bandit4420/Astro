@@ -10,7 +10,7 @@ A native Android home for your stories. Built for the small moments between epis
 
 **Android 12+** · **Kotlin + Jetpack Compose** · **AniList**
 
-[Web edition](https://astro-anime-bandit.bandit44.chatgpt.site) · [Builds](https://github.com/Bandit4420/Astro/actions) · [Changelog](CHANGELOG.md) · [Development](docs/DEVELOPMENT.md)
+[Releases](https://github.com/Bandit4420/Astro/releases) · [Web edition](https://astro-anime-bandit.bandit44.chatgpt.site) · [Builds](https://github.com/Bandit4420/Astro/actions) · [Changelog](CHANGELOG.md) · [Development](docs/DEVELOPMENT.md)
 
 </div>
 
@@ -20,7 +20,7 @@ A native Android home for your stories. Built for the small moments between epis
 
 Astro is moving from the web into native Android: midnight-black screens, artwork-inspired accents, quick progress updates, and notifications that belong on your phone.
 
-**Status: first native preview built successfully in CI.** This is an early local-tracking app. AniList account login and sync are the next milestone, and a production APK has not been released. The working website remains separate.
+**Status: 0.2 parity preview in verification.** The major website workflows now have native implementations. Live AniList login needs a dedicated native client ID; stable release signing and phone acceptance remain release gates. See [parity status](docs/PARITY.md).
 
 ## In this native preview
 
@@ -28,11 +28,13 @@ Astro is moving from the web into native Android: midnight-black screens, artwor
 | :--- | :--- |
 | 🏠 Mission Control | Continue watching and reading, local tracked runtime, completion counts, trending spotlight. |
 | 📚 Anime · Manga · Novels | AniList search and discovery, paginated to 80 titles. |
-| ⚡ Your collection | On-device storage, status controls, and +1 episode/chapter. |
-| 🎭 Beyond the cover | Title details, first 25 characters, Japanese voice actors, biographies, and external trailer links. |
-| 📅 Your week | Weekly airing schedule, Only my anime, and local/IST display. |
+| ⚡ Your collection | Account-separated libraries, episode/chapter/volume tracking, ratings, private notes and conflict-aware AniList auto-sync. |
+| 🎭 Beyond the cover | Title details, paginated characters, Japanese voice actors, biographies, and external trailer links. |
+| 📅 Your week | Previous/next weeks, Only my anime, local/IST, countdowns and calendar export. |
 | 🔔 Episode reminders | Opt-in Android notifications for currently watching titles; background scheduling and duplicate suppression. |
-| 🎨 Your atmosphere | Astro, AMOLED, Sakura, Cyberpunk and Ocean; artwork accents across the screen. |
+| 🎨 Your atmosphere | 12 presets, artwork accents, glass opacity, decorative backdrop blur, cover radius and size. |
+| 🎮 More to explore | Separate cover/clue/trivia quiz, streaks, roulettes, public profile compatibility, galaxy view and Wrapped. |
+| 💾 Your data | Web/native JSON backup interchange; private notes, quiz records and history. Login tokens excluded. |
 | 🛡️ Spoiler protection | Descriptions, cast and biographies hidden until you choose to reveal them. |
 
 ## Built with your battery in mind
@@ -47,7 +49,7 @@ Artwork caches have explicit limits. Search is debounced, obsolete requests canc
 
 Open [GitHub Actions](https://github.com/Bandit4420/Astro/actions), select a **successful Android preview run**, and download its APK artifact. Extract the ZIP to find `app-debug.apk` and its SHA-256 checksum. Private repository access is required. The presence of workflow source alone does not mean a successful APK is available.
 
-These are debug builds with temporary signing identities; a later build may require uninstalling the old one and losing its local data. Keep your main collection on AniList/the web edition while native account sync and backup are being built.
+These are debug builds with temporary signing identities; a later build may require uninstalling the old one and losing its local data. Backups are implemented in 0.2. Version 0.1 has no export screen: do not uninstall it if you need its local data. Keep your main collection on AniList while live sync validation is pending.
 
 To build locally:
 
@@ -66,8 +68,10 @@ Requires JDK 17 and Android SDK 35. See [development notes](docs/DEVELOPMENT.md)
 - [x] Gradle wrapper and Android CI workflow source.
 - [x] Compile the first APK, pass six unit tests, and finish lint with no errors.
 - [ ] Test installation, screens and reminders on Android devices.
-- [ ] Secure AniList login, account separation and durable auto-sync.
-- [ ] Port OP/ED credits, quiz, advanced filters, chibi notices and remaining web features.
+- [x] Implement secure AniList login, account separation and durable auto-sync.
+- [ ] Configure native OAuth client and verify against a live test account.
+- [x] Port OP/ED credits, quiz, advanced filters, profile charts, chibi notices and personal tools.
+- [x] Add native/web backup interchange and account-bound imports.
 - [ ] Backup/export, accessibility checks and measured battery/memory profiling.
 - [ ] Stable release signing and APK distribution through GitHub Releases.
 

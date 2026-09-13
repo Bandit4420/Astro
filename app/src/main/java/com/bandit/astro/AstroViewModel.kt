@@ -24,18 +24,24 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
     private val dao get() = app.database.dao()
     val account = app.account.session
     val syncState = app.sync.state
+    data class OwnedCollection(val owner:Int,val entries:List<LibraryEntry>)
+    data class OwnedHistory(val owner:Int,val events:List<HistoryEvent>)
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val collection = account.map { it?.id ?: 0 }.distinctUntilChanged().flatMapLatest { id -> app.databaseFor(id).dao().observeCollection().onStart { emit(emptyList()) } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val ownedCollection = account.map { it?.id ?: 0 }.distinctUntilChanged().flatMapLatest { id ->
+        app.databaseFor(id).dao().observeCollection().map { OwnedCollection(id,it) }.onStart { emit(OwnedCollection(id,emptyList())) }
+    }.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),OwnedCollection(-1,emptyList()))
+    val collection get() = ownedCollection.value.takeIf { it.owner == (account.value?.id ?: 0) }?.entries.orEmpty()
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val history = account.map { it?.id ?: 0 }.distinctUntilChanged().flatMapLatest { id -> app.databaseFor(id).dao().observeHistory().onStart { emit(emptyList()) } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val ownedHistory = account.map { it?.id ?: 0 }.distinctUntilChanged().flatMapLatest { id ->
+        app.databaseFor(id).dao().observeHistory().map { OwnedHistory(id,it) }.onStart { emit(OwnedHistory(id,emptyList())) }
+    }.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),OwnedHistory(-1,emptyList()))
     val profile = MutableStateFlow<UserProfile?>(null)
     val profileError = MutableStateFlow("")
     val spotlight = MutableStateFlow<List<Media>>(emptyList())
     val quizPool = MutableStateFlow<List<Media>>(emptyList())
     val quizLoading = MutableStateFlow(false)
     val suggestions = MutableStateFlow<Pair<String,List<Media>>>("" to emptyList())
+    val suggestionGenres=MutableStateFlow<List<String>>(emptyList())
     val songs = MutableStateFlow<Pair<List<Song>,List<Song>>?>(null)
     val songsError = MutableStateFlow("")
     val songsLoading = MutableStateFlow(false)
@@ -46,6 +52,7 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
     private var profileJob: Job? = null
     private var studioJob: Job? = null
     private var compareJob: Job? = null
+    private var quizJob: Job? = null
     private var castJob: Job? = null
     val castLoading = MutableStateFlow(false)
     val preferences = app.preferences.flow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Preferences())
@@ -99,12 +106,16 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun open(id: Int) {
         detailJob?.cancel(); castJob?.cancel(); castLoading.value=false; songsJob?.cancel(); songs.value=null; songsError.value=""; songsLoading.value=false; closePerson()
+        val owner=account.value?.id ?: 0
         _detail.value = DetailState(id, detailCache[id], loading = detailCache[id] == null)
         detailJob = viewModelScope.launch {
             try {
                 val result = app.api.detail(id)
                 detailCache[id] = result
                 _detail.value = DetailState(id, result)
+                val db=app.databaseFor(owner)
+                db.withTransaction {db.dao().entry(id)?.let {old->val m=result.media;db.dao().put(old.copy(total=m.total,duration=m.duration,totalVolumes=m.volumes,
+                    genres=m.genres.joinToString("|"),studios=m.studios.joinToString("|"),nextEpisode=m.nextEpisode,nextAiring=m.nextAiring))}}
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { _detail.value = _detail.value.copy(loading = false, error = friendly(e)) }
         }
@@ -211,14 +222,14 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
             songs.value=rows("openings") to rows("endings")
         } catch(e:CancellationException){throw e} catch(e:Exception){songsError.value=e.message ?: "Could not load songs."} finally {songsLoading.value=false} }
     }
-    fun recommend() { val entry=collection.value.filter { it.status=="COMPLETED" || it.score>=70 }.maxByOrNull { it.score } ?: return
-        task { val owner=account.value?.id; val result=app.api.detail(entry.mediaId); if(account.value?.id != owner) return@task; suggestions.value=entry.title to result.recommendations.filter { m -> collection.value.none { it.mediaId==m.id } } }
+    fun recommend() { val entry=collection.filter { it.status=="COMPLETED" || it.score>=70 }.maxByOrNull { it.score } ?: return
+        task { val owner=account.value?.id; val result=app.api.detail(entry.mediaId); if(account.value?.id != owner) return@task; suggestionGenres.value=result.media.genres;suggestions.value=entry.title to result.recommendations.filter { m -> collection.none { it.mediaId==m.id } } }
     }
     fun compare(name:String) { compareJob?.cancel();comparison.value=null;comparisonError.value="";val owner=account.value?.id ?: 0
         compareJob=viewModelScope.launch { try { val p=app.api.profile(name.trim());val entries=app.api.remoteList(p.id);if((account.value?.id ?: 0)==owner) comparison.value=p to entries.map { it.entry } }
             catch(e:CancellationException){throw e} catch(e:Exception){comparisonError.value=e.message ?: "Could not compare this public profile."} }
     }
-    fun loadQuizPool(catalog:Catalog) { task { quizLoading.value=true;try {quizPool.value=app.api.discover(catalog,"",1).media} finally {quizLoading.value=false} } }
+    fun loadQuizPool(catalog:Catalog) {quizJob?.cancel();quizPool.value=emptyList();quizJob=viewModelScope.launch {quizLoading.value=true;try {quizPool.value=app.api.discover(catalog,"",1).media} catch(e:CancellationException){throw e} catch(e:Exception){announce(e.message ?: "Quiz titles could not load.")} finally {quizLoading.value=false}} }
     suspend fun backup(web:Boolean=false):String { val owner=account.value?.id ?: 0;val db=app.databaseFor(owner)
         val data=db.withTransaction { JSONObject(backupJson(owner,db.dao().entries(),db.dao().history())).put("quiz",QuizStore(app,owner).records()).toString(2) }
         return if(web) toWebBackup(data) else data

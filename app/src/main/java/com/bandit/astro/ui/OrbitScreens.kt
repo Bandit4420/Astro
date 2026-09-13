@@ -34,7 +34,7 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
     val profile by m.profile.collectAsStateWithLifecycle();val error by m.profileError.collectAsStateWithLifecycle();val account by m.account.collectAsStateWithLifecycle()
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(22.dp)) {
         item {AccountPanel(m)}
-        val user=profile
+        val user=profile?.takeIf {it.id==account?.id}
         if(user!=null) {
             if(user.banner.isNotBlank())item{Cover(user.banner,"Profile banner",Modifier.fillMaxWidth().height(140.dp))}
             item{SectionTitle(user.name,"AniList profile #${user.id}")}
@@ -55,7 +55,7 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
     }
 }
 @Composable internal fun StatsScreen(entries:List<LibraryEntry>,m:AstroViewModel) {
-    val history by m.history.collectAsStateWithLifecycle();var period by rememberSaveable{mutableStateOf("This month")};val zone=ZoneId.systemDefault();val today=LocalDate.now(zone)
+    val owned by m.ownedHistory.collectAsStateWithLifecycle();val account by m.account.collectAsStateWithLifecycle();val history=owned.takeIf {it.owner==(account?.id ?: 0)}?.events.orEmpty();var period by rememberSaveable{mutableStateOf("This month")};val zone=ZoneId.systemDefault();val today=LocalDate.now(zone)
     val start=when(period){"This month"->today.withDayOfMonth(1);"This year"->today.withDayOfYear(1);else->LocalDate.of(1970,1,1)}.atStartOfDay(zone).toInstant().toEpochMilli()
     val events=history.filter {it.at>=start};val rated=entries.filter {it.score>0}
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(24.dp)) {
@@ -83,6 +83,7 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
         item {Chibi(Modifier.size(84.dp));SectionTitle("Anime Quiz","Guess stories from covers, clues or metadata. No plot trivia.")}
         if(rounds.isEmpty()) {
+            item {TextButton(onClick={m.loadQuizPool(catalog)},enabled=!loading) {Text("Refresh quiz titles")}}
             item {Row {Catalog.entries.forEach {c->FilterChip(selected=catalog==c,onClick={catalog=c},label={Text(c.label)})}}}
             item {Choice("Mode",mode,listOf("Cover","Clues","Trivia")){mode=it.ifBlank {"Cover"}};Choice("Difficulty",difficulty,listOf("Easy","Medium","Hard","Hashira")){difficulty=it.ifBlank {"Easy"}}}
             item {Text("$wins quiz wins · $streak day streak");if(wins>=1)Text("🏆 First orbit mastered");if(wins>=10)Text("🌌 Ten quiz victories");if(wins>=100)Text("⚔ 100 trivia wins");if(records.mastered()>=10)Text("🌌 10 universes mastered")}

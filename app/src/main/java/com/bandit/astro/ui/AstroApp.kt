@@ -51,12 +51,13 @@ private val destinations = listOf(
 @Composable
 fun AstroApp(model: AstroViewModel, notificationId: Int, consumed: () -> Unit) {
     val preferences by model.preferences.collectAsStateWithLifecycle()
-    val library by model.collection.collectAsStateWithLifecycle()
+    val ownedLibrary by model.ownedCollection.collectAsStateWithLifecycle()
     val discovery by model.discovery.collectAsStateWithLifecycle()
     val detail by model.detail.collectAsStateWithLifecycle()
     val person by model.person.collectAsStateWithLifecycle()
     val schedule by model.schedule.collectAsStateWithLifecycle()
     val account by model.account.collectAsStateWithLifecycle()
+    val library=ownedLibrary.takeIf {it.owner == (account?.id ?: 0)}?.entries.orEmpty()
     var extra by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(account?.id) { extra="" }
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -126,6 +127,7 @@ internal fun OrbitScreen(library: List<LibraryEntry>, discovery: Discovery, mode
     val account by model.account.collectAsStateWithLifecycle()
     val spotlight by model.spotlight.collectAsStateWithLifecycle()
     val recommended by model.suggestions.collectAsStateWithLifecycle()
+    val sourceGenres by model.suggestionGenres.collectAsStateWithLifecycle()
     val current = library.filter { it.status in listOf("CURRENT","REPEATING") }
     val minutes = library.filter { it.type == "ANIME" }.sumOf { it.progress.toLong() * it.duration }
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
@@ -162,7 +164,9 @@ internal fun OrbitScreen(library: List<LibraryEntry>, discovery: Discovery, mode
             Text("Because you liked ${recommended.first}",fontWeight=FontWeight.Bold)
             Text("AniList community recommendations · shared genres shown below",style=MaterialTheme.typography.bodySmall)
             LazyRow(horizontalArrangement=Arrangement.spacedBy(14.dp)) { items(recommended.second,key={it.id}) { m -> Column(Modifier.width(160.dp)) {
-                MediaCard(m) { model.open(m.id) };Text(m.genres.joinToString(" • "),fontSize=11.sp)
+                MediaCard(m) { model.open(m.id) }
+                val shared=m.genres.filter {it in sourceGenres};val union=(m.genres+sourceGenres).distinct().size
+                Text(if(shared.isEmpty()) "Recommended by AniList users" else "${if(union>0) shared.size*100/union else 0}% genre overlap · ${shared.joinToString(" • ")}",fontSize=11.sp)
             } } }
         } }
     }
