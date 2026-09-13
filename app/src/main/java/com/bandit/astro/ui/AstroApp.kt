@@ -353,7 +353,7 @@ internal fun PersonScreen(state: PersonState, cast: List<CastMember>, spoilers: 
             item { Text(person.name, fontSize = 30.sp, fontWeight = FontWeight.Bold) }
             item {
                 if (spoilers && !revealed) Notice("Biography hidden", "Biographies may mention events beyond your progress.", "Reveal biography", { revealed = true })
-                else RichAbout(person.description)
+                else RichAbout(person.description,revealSpoilers=true)
             }
             if(!spoilers || revealed) {
                 item { SectionTitle("Other works") }

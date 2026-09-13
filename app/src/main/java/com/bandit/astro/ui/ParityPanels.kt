@@ -116,17 +116,13 @@ import java.time.*
     TextButton(onClick={launcher.launch("Astro-schedule.ics")},enabled=rows.isNotEmpty()) {Text("Export this week's calendar")}
 }
 @Composable internal fun ExpandableDescription(value:String) {var expanded by rememberSaveable(value){mutableStateOf(false)};Column {SectionTitle("About this story");Text(plainText(value).ifBlank {"No description available yet."},maxLines=if(expanded) Int.MAX_VALUE else 5,color=MaterialTheme.colorScheme.onSurfaceVariant);TextButton(onClick={expanded=!expanded}) {Text(if(expanded) "Show less" else "Read more")}}}
-@Composable internal fun RichAbout(value:String) {
-    val imageRegex=Regex("!\\[[^]]*]\\((https://[^\\s)]+)\\)|img\\((https://[^\\s)]+)\\)|<img[^>]+src=[\"'](https://[^\"']+)[\"'][^>]*>",RegexOption.IGNORE_CASE)
+@Composable internal fun RichAbout(value:String,revealSpoilers:Boolean=false) {
     val context=LocalContext.current
     Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        var cursor=0
-        for(match in imageRegex.findAll(value)) {
-            val text=value.substring(cursor,match.range.first);if(text.isNotBlank()) Text(plainText(text),lineHeight=23.sp)
-            val url=match.groupValues.drop(1).first {it.isNotBlank()};AsyncImage(url,"Profile image",Modifier.fillMaxWidth().heightIn(max=400.dp).clickable {openLink(context,url)})
-            cursor=match.range.last+1
+        profileParts(value,revealSpoilers).forEach {(type,content)->
+            if(type=="image")AsyncImage(content,"Profile image",Modifier.fillMaxWidth().heightIn(max=400.dp).clickable {openLink(context,content)})
+            else if(content.isNotBlank())Text(plainText(content),lineHeight=23.sp)
         }
-        val tail=value.substring(cursor);if(tail.isNotBlank())Text(plainText(tail),lineHeight=23.sp)
         if(value.isBlank())Text("No biography listed yet.")
     }
 }

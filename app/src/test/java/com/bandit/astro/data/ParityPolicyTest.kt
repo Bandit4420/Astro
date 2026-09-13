@@ -59,4 +59,11 @@ class ParityPolicyTest {
         val web=toWebBackup(original);val imported=parseBackup(web,44).first.single()
         assertEquals(85,imported.score);assertEquals(10,imported.progress);assertEquals("Keep me",imported.notes)
     }
+    @Test fun `profile images support AniList widths and hide marked spoilers`() {
+        val source="img300(https://example.com/a.png) img50%(https://example.com/b.png) ![c](https://example.com/c.png) ~!img(https://example.com/spoiler.png)!~"
+        assertEquals(3,profileParts(source).count {it.first=="image"})
+        assertEquals(4,profileParts(source,true).count {it.first=="image"})
+        assertTrue(profileParts(source).any {it.second.contains("[Spoiler hidden]")})
+        assertEquals(0,profileParts("img(file:///private)").count {it.first=="image"})
+    }
 }
