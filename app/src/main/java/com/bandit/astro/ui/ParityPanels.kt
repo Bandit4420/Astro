@@ -42,9 +42,10 @@ import java.time.*
 @Composable internal fun AmbientBackdrop(p:Preferences,art:String) {
     val accent=MaterialTheme.colorScheme.primary
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        if(p.theme=="AMOLED") return@Box
         val blurred=if(p.blur) Modifier.blur(p.blurAmount.dp) else Modifier
         Box(Modifier.fillMaxSize().then(blurred).background(Brush.radialGradient(listOf(accent.copy(alpha=.2f),Color.Transparent)))) {
-            if(p.artwork && art.isNotBlank() && (p.glass || p.theme=="Liquid Glass")) AsyncImage(art,null,Modifier.fillMaxSize(),alpha=.25f,contentScale=androidx.compose.ui.layout.ContentScale.Crop)
+            if(p.artwork && art.isNotBlank() && p.glass) AsyncImage(art,null,Modifier.fillMaxSize(),alpha=.25f,contentScale=androidx.compose.ui.layout.ContentScale.Crop)
         }
     }
 }
@@ -52,7 +53,7 @@ import java.time.*
     ToggleRow("Liquid glass","Translucent surfaces with artwork behind them.",p.glass) {m.flag("glass",it)}
     ToggleRow("Backdrop blur","Blur the decorative background while keeping text sharp.",p.blur) {m.flag("blur",it)}
     if(p.blur) { Text("Blur strength · ${p.blurAmount.toInt()}");Slider(p.blurAmount,{m.number("blurAmount",it)},valueRange=0f..32f) }
-    if(p.glass || p.theme=="Liquid Glass") {Text("Glass opacity · ${(p.transparency*100).toInt()}%");Slider(p.transparency,{m.number("transparency",it)},valueRange=.35f..1f)}
+    if(p.glass) {Text("Glass opacity · ${(p.transparency*100).toInt()}%");Slider(p.transparency,{m.number("transparency",it)},valueRange=.35f..1f)}
     ToggleRow("Background artwork","Show title banners and artwork behind glass.",p.artwork) {m.flag("artwork",it)}
     ToggleRow("Image transitions","Fade artwork as it loads.",p.animations) {m.flag("animations",it)}
     ToggleRow("Compact covers","Shorter cover cards in discovery.",p.compact) {m.flag("compact",it)}

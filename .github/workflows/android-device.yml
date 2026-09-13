@@ -40,10 +40,10 @@ jobs:
           script: |
             ./gradlew --no-daemon :app:connectedDebugAndroidTest
             mkdir -p app/build/device-evidence
-            adb pull /sdcard/Android/data/com.bandit.astro.preview/files/screenshots app/build/device-evidence/screenshots
-            adb shell dumpsys meminfo com.bandit.astro.preview > app/build/device-evidence/memory.txt
-            adb shell am force-stop com.bandit.astro.preview
+            adb pull /sdcard/Pictures/AstroTest app/build/device-evidence/screenshots
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb shell am start -W -n com.bandit.astro.preview/com.bandit.astro.MainActivity > app/build/device-evidence/startup.txt
+            adb shell dumpsys meminfo com.bandit.astro.preview > app/build/device-evidence/memory.txt
       - name: Upload device reports
         if: always()
         uses: actions/upload-artifact@v4

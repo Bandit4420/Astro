@@ -13,8 +13,15 @@ class NativeSmokeTest {
     private fun screenshot(name:String) {
         compose.waitForIdle()
         val instrumentation=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
-        val dir=instrumentation.targetContext.getExternalFilesDir("screenshots")!!;dir.mkdirs()
-        instrumentation.uiAutomation.takeScreenshot()?.let {image->java.io.File(dir,"$name.png").outputStream().use {image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};image.recycle()}
+        val resolver=instrumentation.targetContext.contentResolver
+        val values=android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Images.Media.DISPLAY_NAME,"$name.png")
+            put(android.provider.MediaStore.Images.Media.MIME_TYPE,"image/png")
+            put(android.provider.MediaStore.Images.Media.RELATIVE_PATH,"Pictures/AstroTest")
+        }
+        val uri=resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values)!!
+        instrumentation.uiAutomation.takeScreenshot()?.let {image->resolver.openOutputStream(uri)!!.use {image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};image.recycle()}
+
     }
     @Test fun primaryNavigationAndProfileOpen() {
         compose.onNodeWithText("MISSION CONTROL").assertExists();screenshot("01-orbit")

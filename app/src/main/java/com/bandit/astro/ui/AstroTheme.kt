@@ -30,14 +30,15 @@ fun AstroTheme(preferences: Preferences, artworkAccent: String, content: @Compos
     val lifted = lerp(extracted, Color.White, .3f)
     val accent = if (lifted.luminance() < .32f) lerp(lifted, Color.White, .45f) else lifted
     val background = if (preferences.theme == "AMOLED") Color.Black else lerp(Color(0xFF080C10), accent, .025f)
-    val glass = preferences.glass || preferences.theme == "Liquid Glass"
+    val glass = preferences.glass
+    fun glassSurface(color: Color) = color.copy(alpha = if(glass) preferences.transparency else 1f)
     CompositionLocalProvider(LocalAppearance provides preferences) {
     MaterialTheme(colorScheme = darkColorScheme(
         surfaceTint = accent,
         surfaceDim = background, surfaceBright = lerp(background, accent, .14f),
-        surfaceContainerLowest = background, surfaceContainerLow = lerp(background, accent, .025f),
-        surfaceContainer = lerp(background, accent, .045f), surfaceContainerHigh = lerp(background, accent, .065f),
-        surfaceContainerHighest = lerp(background, accent, .09f),
+        surfaceContainerLowest = glassSurface(background), surfaceContainerLow = glassSurface(lerp(background, accent, .025f)),
+        surfaceContainer = glassSurface(lerp(background, accent, .045f)), surfaceContainerHigh = glassSurface(lerp(background, accent, .065f)),
+        surfaceContainerHighest = glassSurface(lerp(background, accent, .09f)),
         secondaryContainer = lerp(background, accent, .18f), onSecondaryContainer = accent,
         primary = accent, onPrimary = Color(0xFF102018), secondary = accent,
         background = background, onBackground = Color(0xFFF0F2F4),

@@ -179,7 +179,7 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
     fun remove(id:Int)=editEntry(id) { it.copy(deleted=true) }
     fun status(id:Int,value:String)=editEntry(id,"chapter") { it.copy(status=value,progress=if(value=="COMPLETED" && it.total>0) it.total else it.progress) }
     fun notes(id:Int,value:String) { val db=app.database; task { db.withTransaction { db.dao().entry(id)?.let { db.dao().put(it.copy(notes=value.take(10000))) } } } }
-    fun theme(value:String)=task { app.preferences.theme(value) }
+    fun theme(value:String)=task { app.preferences.theme(value);if(value=="Liquid Glass")app.preferences.flag("glass",true);if(value=="Dynamic")app.preferences.flag("dynamic",true) }
     fun flag(name:String,value:Boolean)=task { app.preferences.flag(name,value) }
     fun number(name:String,value:Float)=task { app.preferences.number(name,value) }
     fun filter(value:ExploreFilters) { discoverJob?.cancel(); _discovery.value=Discovery(catalog=_discovery.value.catalog,search=_discovery.value.search,filters=value);loadDiscovery() }
