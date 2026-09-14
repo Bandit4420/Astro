@@ -27,7 +27,7 @@ The 0.2 preview ports the main website workflows to native Kotlin/Compose. This 
 
 - Configure the native AniList client and test login, token expiry, cross-device conflict, deletion, offline edits, sign-out and account switching against a test account.
 - Establish stable release signing. CI debug keys may change between builds. Do not uninstall the first preview if its local progress matters; export/migrate before a destructive reinstall.
-- Exercise Room v1→v2 migration and UI on emulator/phone; verify notifications on Android 12 and Android 13+.
+- Android 12 emulator navigation, Room v1→v2 migration and concurrent-sync acknowledgement tests passed on 14 September 2026. Physical-phone layout and notification checks on Android 12 and Android 13+ remain pending.
 - Measure startup, scrolling, image memory budget and idle battery; compare glass on/off on OnePlus Nord 5.
 - Refine visual parity and recommendations after real account/device review.
 
