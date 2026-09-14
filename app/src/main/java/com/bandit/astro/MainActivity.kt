@@ -7,12 +7,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bandit.astro.ui.AstroApp
 
 class MainActivity : ComponentActivity() {
+    private var authUri by mutableStateOf<android.net.Uri?>(null)
     private var notificationMediaId by mutableIntStateOf(0)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -21,8 +24,11 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
         notificationMediaId = intent.getIntExtra("mediaId", 0)
+        authUri = intent.data?.takeIf { it.scheme == "astro" }
+        intent.data = null
         setContent {
             val model: AstroViewModel = viewModel()
+            LaunchedEffect(authUri) { authUri?.let { model.finishLogin(it); authUri=null } }
             AstroApp(model, notificationMediaId) { notificationMediaId = 0; intent.removeExtra("mediaId") }
         }
     }
@@ -30,5 +36,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         notificationMediaId = intent.getIntExtra("mediaId", 0)
+        authUri = intent.data?.takeIf { it.scheme == "astro" }
+        intent.data = null
     }
 }

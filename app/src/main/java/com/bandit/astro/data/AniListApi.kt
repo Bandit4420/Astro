@@ -12,9 +12,10 @@ import kotlin.coroutines.resumeWithException
 
 class ApiException(message: String, val retryable: Boolean = false) : IOException(message)
 class AniListApi(private val client: OkHttpClient, private val endpoint: String = "https://graphql.anilist.co") {
-    private suspend fun query(query: String, variables: JSONObject = JSONObject()): JSONObject {
+    internal suspend fun query(query: String, variables: JSONObject = JSONObject(), token: String? = null): JSONObject {
         val body = JSONObject().put("query", query).put("variables", variables).toString()
         val request = Request.Builder().url(endpoint).header("Accept", "application/json")
+            .apply { if (token != null) header("Authorization", "Bearer $token") }
             .post(body.toRequestBody("application/json".toMediaType())).build()
         val text = suspendCancellableCoroutine<String> { continuation ->
             val call = client.newCall(request)
@@ -27,7 +28,7 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
                     response.use {
                         if (!continuation.isActive) return
                         if (!it.isSuccessful) {
-                            val message = if (it.code == 429) "AniList is busy. Please try again in a minute." else "AniList could not load this right now (${it.code})."
+                            val message = if (it.code == 401 || it.code == 403) "AniList authorization expired or was refused. Sign in again." else if (it.code == 429) "AniList is busy. Please try again in a minute." else "AniList could not load this right now (${it.code})."
                             continuation.resumeWithException(ApiException(message, it.code == 429 || it.code >= 500))
                         } else continuation.resume(it.body?.string() ?: "{}")
                     }
@@ -36,26 +37,30 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
         }
         val result = JSONObject(text)
         if ((result.optJSONArray("errors")?.length() ?: 0) > 0)
-            throw ApiException("AniList could not complete this request. Please try again.")
+            throw ApiException("AniList could not complete this request. Please try again.", result.optJSONArray("errors")?.optJSONObject(0)?.optInt("status")?.let { it == 429 || it >= 500 } ?: false)
         return result.optJSONObject("data") ?: throw ApiException("No data was returned by AniList.")
     }
 
-    suspend fun discover(catalog: Catalog, search: String, page: Int): CatalogPage {
+    suspend fun discover(catalog: Catalog, search: String, page: Int, filters: ExploreFilters = ExploreFilters()): CatalogPage {
         val variables = JSONObject().put("page", page).put("type", if (catalog == Catalog.ANIME) "ANIME" else "MANGA")
             .put("search", search.trim().ifEmpty { null })
-            .put("format", if (catalog == Catalog.NOVEL) "NOVEL" else JSONObject.NULL)
+            .put("format", if (catalog == Catalog.NOVEL) "NOVEL" else filters.format.ifBlank { null } ?: JSONObject.NULL)
             .put("excluded", if (catalog == Catalog.MANGA) JSONArray().put("NOVEL") else JSONObject.NULL)
-        val data = query("""query(${'$'}page:Int, ${'$'}type:MediaType, ${'$'}search:String, ${'$'}format:MediaFormat, ${'$'}excluded:[MediaFormat]) {
+        filters.variables().keys().forEach { key -> variables.put(key, filters.variables().get(key)) }
+        val data = query("""query(${'$'}genre:String, ${'$'}tag:String, ${'$'}year:String, ${'$'}season:MediaSeason, ${'$'}status:MediaStatus, ${'$'}score:Int, ${'$'}episodes:Int, ${'$'}sort:[MediaSort], ${'$'}minEpisodes:Int, ${'$'}page:Int, ${'$'}type:MediaType, ${'$'}search:String, ${'$'}format:MediaFormat, ${'$'}excluded:[MediaFormat]) {
             Page(page:${'$'}page, perPage:20) { pageInfo { hasNextPage }
-                media(type:${'$'}type, search:${'$'}search, format:${'$'}format, format_not_in:${'$'}excluded, isAdult:false, sort:[TRENDING_DESC,POPULARITY_DESC]) { $MEDIA_FIELDS }
+                media(type:${'$'}type, search:${'$'}search, format:${'$'}format, format_not_in:${'$'}excluded, isAdult:false, genre:${'$'}genre, tag:${'$'}tag, startDate_like:${'$'}year, season:${'$'}season, status:${'$'}status, averageScore_greater:${'$'}score, episodes_lesser:${'$'}episodes, sort:${'$'}sort, episodes_greater:${'$'}minEpisodes) { $MEDIA_FIELDS }
             }
         }""", variables).getJSONObject("Page")
         return CatalogPage(data.getJSONArray("media").objects().map(::parseMedia), data.getJSONObject("pageInfo").optBoolean("hasNextPage"))
     }
     suspend fun detail(id: Int): MediaDetail {
         val data = query("""query(${'$'}id:Int) { Media(id:${'$'}id) { $MEDIA_FIELDS
-            characters(sort:[ROLE,RELEVANCE,ID], perPage:25) { edges { role node { id name { full } image { large } }
+            characters(sort:[ROLE,RELEVANCE,ID], perPage:25) { pageInfo { hasNextPage } edges { role node { id name { full } image { large } }
                 voiceActors(language:JAPANESE, sort:RELEVANCE) { id name { full } image { large } } } }
+            staff(perPage:25) { edges { role node { id name { full } image { large } } } }
+            relations { edges { relationType node { $MEDIA_FIELDS isAdult } } }
+            recommendations(perPage:12, sort:RATING_DESC) { nodes { mediaRecommendation { $MEDIA_FIELDS isAdult } } }
         } }""", JSONObject().put("id", id)).getJSONObject("Media")
         val characters = data.optJSONObject("characters")?.optJSONArray("edges")?.objects()?.map { edge ->
             val node = edge.getJSONObject("node")
@@ -64,13 +69,16 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
                 edge.text("role"), actor?.optJSONObject("name")?.text("full").orEmpty(), actor?.optInt("id") ?: 0,
                 actor?.optJSONObject("image")?.text("large").orEmpty())
         }.orEmpty()
-        return MediaDetail(parseMedia(data), characters)
+        return MediaDetail(parseMedia(data), characters, moreCast = data.getJSONObject("characters").getJSONObject("pageInfo").optBoolean("hasNextPage"),
+            staff = data.optJSONObject("staff")?.optJSONArray("edges")?.objects()?.map { e -> val n=e.getJSONObject("node"); Credit(n.getInt("id"),n.getJSONObject("name").text("full"),n.optJSONObject("image")?.text("large").orEmpty(), e.text("role")) }.orEmpty(),
+            relations = data.optJSONObject("relations")?.optJSONArray("edges")?.objects()?.mapNotNull { e -> e.optJSONObject("node")?.takeUnless { it.optBoolean("isAdult") }?.let { Relation(parseMedia(it), e.text("relationType")) } }.orEmpty(),
+            recommendations = data.optJSONObject("recommendations")?.optJSONArray("nodes")?.objects()?.mapNotNull { it.optJSONObject("mediaRecommendation")?.takeUnless { n -> n.optBoolean("isAdult") }?.let(::parseMedia) }.orEmpty())
     }
-    suspend fun person(id: Int, staff: Boolean): Person {
+    suspend fun person(id: Int, staff: Boolean, page: Int = 1): Person {
         val field = if (staff) "Staff" else "Character"
-        val data = query("""query(${'$'}id:Int) { $field(id:${'$'}id) { name { full } image { large } description } }""",
+        val data = query("""query(${'$'}id:Int) { $field(id:${'$'}id) { name { full } image { large } description ${if (staff) "staffMedia" else "media"}(page:$page, perPage:25, sort:POPULARITY_DESC) { pageInfo { hasNextPage } nodes { $MEDIA_FIELDS isAdult } } } }""",
             JSONObject().put("id", id)).getJSONObject(field)
-        return Person(data.getJSONObject("name").text("full"), data.optJSONObject("image")?.text("large").orEmpty(), data.text("description"))
+        return Person(data.getJSONObject("name").text("full"), data.optJSONObject("image")?.text("large").orEmpty(), data.text("description"), data.getJSONObject(if (staff) "staffMedia" else "media").getJSONArray("nodes").objects().filterNot { it.optBoolean("isAdult") }.map(::parseMedia), page, data.getJSONObject(if (staff) "staffMedia" else "media").getJSONObject("pageInfo").optBoolean("hasNextPage"))
     }
     suspend fun schedule(from: Long, to: Long, page: Int = 1, ids: List<Int>? = null): Pair<List<Airing>, Boolean> {
         val vars = JSONObject().put("from", from).put("to", to).put("page", page)
@@ -88,8 +96,8 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
         } to data.getJSONObject("pageInfo").optBoolean("hasNextPage")
     }
     companion object {
-        private const val MEDIA_FIELDS = """id title { userPreferred native } coverImage { large color } bannerImage type format status
-            description(asHtml:false) episodes chapters duration averageScore seasonYear genres
+        internal const val MEDIA_FIELDS = """id idMal volumes studios(isMain:true) { nodes { name } } title { userPreferred native } coverImage { large color } bannerImage type format status
+            description(asHtml:false) episodes chapters duration averageScore seasonYear startDate { year } genres
             nextAiringEpisode { episode airingAt } trailer { id site }"""
         internal fun parseMedia(value: JSONObject): Media {
             val cover = value.optJSONObject("coverImage")
@@ -101,12 +109,12 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
                 banner = value.text("bannerImage"), accent = cover?.text("color").orEmpty(), type = type,
                 format = value.text("format"), status = value.text("status"), description = value.text("description"),
                 total = value.optInt(if (type == "ANIME") "episodes" else "chapters"), duration = value.optInt("duration"),
-                score = value.optInt("averageScore"), year = value.optInt("seasonYear"),
+                score = value.optInt("averageScore"), year = value.optJSONObject("startDate")?.optInt("year")?.takeIf { it > 0 } ?: value.optInt("seasonYear"),
                 genres = value.optJSONArray("genres")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(),
                 nextEpisode = airing?.optInt("episode") ?: 0, nextAiring = airing?.optLong("airingAt") ?: 0,
-                trailerId = trailer?.text("id").orEmpty(), trailerSite = trailer?.text("site").orEmpty())
+                trailerId = trailer?.text("id").orEmpty(), trailerSite = trailer?.text("site").orEmpty(), malId = value.optInt("idMal"), volumes = value.optInt("volumes"), studios = value.optJSONObject("studios")?.optJSONArray("nodes")?.objects()?.map { it.text("name") }.orEmpty())
         }
     }
 }
-private fun JSONObject.text(key: String): String = if (isNull(key)) "" else optString(key, "")
-private fun JSONArray.objects(): List<JSONObject> = (0 until length()).mapNotNull { optJSONObject(it) }
+internal fun JSONObject.text(key: String): String = if (isNull(key)) "" else optString(key, "")
+internal fun JSONArray.objects(): List<JSONObject> = (0 until length()).mapNotNull { optJSONObject(it) }

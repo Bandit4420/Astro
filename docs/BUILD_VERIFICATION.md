@@ -1,4 +1,18 @@
-# First native build verification
+# Native build verification
+
+## Android 0.2 preview — 14 September 2026
+
+Source: `cd60f74eedf9dcecc52f98b8457e9f29b1ba0b99`.
+
+[Android 12 emulator checks](https://github.com/Bandit4420/Astro/actions/runs/34737224639) passed all three tests: primary navigation, Room v1→v2 data preservation and concurrent edits remaining queued after synchronization acknowledgement. Five screenshots, cold-launch output and a memory snapshot were collected in the [device evidence artifact](https://github.com/Bandit4420/Astro/actions/runs/34737224639/artifacts/10332928402). This is emulator evidence, not a physical-phone performance or battery benchmark.
+
+The [APK build](https://github.com/Bandit4420/Astro/actions/runs/34737224594) was retried after its first queued attempt was cancelled. Publication is gated on successful unit tests, lint, APK assembly, the exact source revision and checksum/archive verification. The release workflow also checks the downloaded reports for 15 passing unit tests and zero lint errors. The final APK hash and size are recorded in the release notes.
+
+Live native OAuth/account synchronization, notification delivery under phone power restrictions, stable signing and visual/idle-battery checks remain acceptance gates. See [PARITY.md](PARITY.md) and [ANILIST_ANDROID.md](ANILIST_ANDROID.md).
+
+---
+
+## Historical: first native build verification
 
 Verified on 12 September 2026.
 

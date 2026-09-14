@@ -1,0 +1,80 @@
+name: Build and publish Astro 1.0
+on:
+  push:
+    branches: [release/v1.0]
+permissions:
+  contents: read
+concurrency:
+  group: publish-astro-v1.0
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Build version 1.0.0
+        run: ./gradlew --no-daemon :app:assembleDebug
+      - name: Verify installation metadata and signature
+        run: |
+          mkdir release-assets
+          cp app/build/outputs/apk/debug/app-debug.apk release-assets/Astro-1.0.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging release-assets/Astro-1.0.apk > apk-metadata.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs release-assets/Astro-1.0.apk > apk-signature.txt
+          gh api "repos/$GH_REPO" > repository.json
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json, os, zipfile
+          assert json.load(open('repository.json'))['private'] is True
+          metadata = Path('apk-metadata.txt').read_text()
+          package = next(x for x in metadata.splitlines() if x.startswith('package:'))
+          assert "name='com.bandit.astro.preview'" in package
+          assert "versionName='1.0.0'" in package
+          assert "versionCode='3'" in package
+          assert "sdkVersion:'31'" in metadata
+          apk = Path('release-assets/Astro-1.0.apk')
+          with zipfile.ZipFile(apk) as archive:
+              assert archive.testzip() is None
+          digest = hashlib.sha256(apk.read_bytes()).hexdigest()
+          apk.with_suffix('.apk.sha256').write_text(digest + '  ' + apk.name + '\n')
+          evidence = f"\nSource: `{os.environ['SOURCE_SHA']}`\n\nAPK size: {apk.stat().st_size:,} bytes.\n\nSHA-256: `{digest}`\n"
+          with open('docs/releases/v1.0.md', 'a') as output:
+              output.write(evidence)
+          print(package)
+          print(evidence)
+          PY
+      - name: Publish regular release and mark Latest
+        run: |
+          gh release create v1.0 \
+            release-assets/Astro-1.0.apk \
+            release-assets/Astro-1.0.apk.sha256 \
+            --target "$SOURCE_SHA" --draft \
+            --title 'Astro 1.0 — Your anime, in orbit' \
+            --notes-file docs/releases/v1.0.md
+          gh release edit v1.0 --draft=false --prerelease=false --latest=true
+      - name: Preserve packaging evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Astro-1.0-packaging-evidence
+          path: |
+            apk-metadata.txt
+            apk-signature.txt
+            app/build/outputs/apk/debug/output-metadata.json
+          retention-days: 14

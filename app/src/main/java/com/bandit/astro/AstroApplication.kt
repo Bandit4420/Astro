@@ -12,9 +12,16 @@ import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
 class AstroApplication : Application(), ImageLoaderFactory {
-    val database by lazy { Room.databaseBuilder(this, AstroDatabase::class.java, "astro.db").build() }
+    val account by lazy { AccountStore(this) }
+    private val databases = mutableMapOf<Int, AstroDatabase>()
+    @Synchronized fun databaseFor(id: Int): AstroDatabase = databases.getOrPut(id) {
+        Room.databaseBuilder(this, AstroDatabase::class.java, if (id == 0) "astro.db" else "astro-account-$id.db")
+            .addMigrations(MIGRATION_1_2).build()
+    }
+    val database get() = databaseFor(account.session.value?.id ?: 0)
+    val sync by lazy { SyncEngine(this) }
     val preferences by lazy { PreferenceStore(this) }
-    private val http by lazy {
+    val http by lazy {
         OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS)
             .callTimeout(30, TimeUnit.SECONDS).build()
     }

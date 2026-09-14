@@ -1,0 +1,87 @@
+name: Publish verified native parity preview
+on:
+  push:
+    branches: [release/native-parity-0.2.0]
+permissions:
+  contents: read
+concurrency:
+  group: publish-native-parity-0.2.0
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      SOURCE_SHA: cd60f74eedf9dcecc52f98b8457e9f29b1ba0b99
+      RELEASE_TAG: v0.2.0-preview
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify source checks and repository visibility
+        run: |
+          gh api "repos/$GH_REPO/actions/runs/34737224594" > build.json
+          gh api "repos/$GH_REPO/actions/runs/34737224639" > device.json
+          gh api "repos/$GH_REPO" > repository.json
+          python - <<'PY'
+          import json, os
+          assert json.load(open('repository.json'))['private'] is True
+          for name in ['build', 'device']:
+              run = json.load(open(name + '.json'))
+              assert run['status'] == 'completed' and run['conclusion'] == 'success', name
+              assert run['head_sha'] == os.environ['SOURCE_SHA'], name
+          PY
+      - name: Download the verified build without rebuilding
+        run: |
+          gh run download 34737224594 --name Astro-Android-12-plus-preview-14 --dir release-assets
+          gh run download 34737224594 --name android-verification-14 --dir verification
+      - name: Verify APK and test reports
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, re, zipfile, xml.etree.ElementTree as ET
+          folder = Path('release-assets')
+          apk = folder / 'app-debug.apk'
+          digest = hashlib.sha256(apk.read_bytes()).hexdigest()
+          assert (folder / 'app-debug.apk.sha256').read_text().split()[0] == digest
+          with zipfile.ZipFile(apk) as archive:
+              assert archive.testzip() is None
+          reports = list(Path('verification').rglob('testDebugUnitTest/index.html'))
+          assert len(reports) == 1, 'Missing unit test report'
+          html = reports[0].read_text()
+          def counter(kind):
+              match = re.search(r'id="' + kind + r'"[\s\S]*?<div class="counter">\s*(\d+)\s*</div>', html)
+              assert match, kind
+              return int(match.group(1))
+          assert counter('tests') == 15
+          assert counter('failures') == 0
+          assert counter('ignored') == 0
+          lint = list(Path('verification').rglob('lint-results-debug.xml'))
+          assert len(lint) == 1, 'Missing lint report'
+          issues = ET.parse(lint[0]).getroot().findall('issue')
+          assert not any(x.get('severity') in ('Error','Fatal') for x in issues)
+          warnings = sum(x.get('severity') == 'Warning' for x in issues)
+          named = folder / 'Astro-0.2.0-preview.apk'
+          apk.rename(named)
+          named.with_suffix('.apk.sha256').write_text(digest + '  ' + named.name + '\n')
+          evidence = f"\nAPK SHA-256: `{digest}`\n\nAPK size: {named.stat().st_size:,} bytes. Unit tests: 15 passed. Lint: 0 errors, {warnings} warnings.\n"
+          with open('docs/releases/v0.2.0-preview.md', 'a') as output:
+              output.write(evidence)
+          print(evidence)
+          with open(__import__('os').environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write(evidence)
+          PY
+      - name: Upload complete draft and publish prerelease
+        run: |
+          gh release create "$RELEASE_TAG" \
+            release-assets/Astro-0.2.0-preview.apk \
+            release-assets/Astro-0.2.0-preview.apk.sha256 \
+            --target "$SOURCE_SHA" --draft --prerelease \
+            --title 'Astro Android 0.2.0 — Your orbit grows' \
+            --notes-file docs/releases/v0.2.0-preview.md
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false

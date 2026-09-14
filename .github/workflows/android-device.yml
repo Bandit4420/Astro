@@ -1,0 +1,56 @@
+name: Android device checks
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: device-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  device:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v3
+      - name: Free unused runner toolchains for emulator storage
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/ghc /opt/ghc
+          df -h /
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise migration and navigation on Android 12
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 31
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics -partition-size 2048
+          emulator-boot-timeout: 300
+          script: |
+            ./gradlew --no-daemon :app:connectedDebugAndroidTest
+            mkdir -p app/build/device-evidence
+            adb pull /sdcard/Pictures/AstroTest app/build/device-evidence/screenshots
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -W -n com.bandit.astro.preview/com.bandit.astro.MainActivity > app/build/device-evidence/startup.txt
+            adb shell dumpsys meminfo com.bandit.astro.preview > app/build/device-evidence/memory.txt
+      - name: Upload device reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-device-${{ github.run_number }}
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+            app/build/device-evidence/
+          retention-days: 14
