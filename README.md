@@ -20,9 +20,9 @@ A native Android home for your stories. Built for the small moments between epis
 
 Astro is moving from the web into native Android: midnight-black screens, artwork-inspired accents, quick progress updates, and notifications that belong on your phone.
 
-**Status: 0.2 parity preview in verification.** The major website workflows now have native implementations. Live AniList login needs a dedicated native client ID; stable release signing and phone acceptance remain release gates. See [parity status](docs/PARITY.md).
+**Version 1.0.0 — regular GitHub release.** The main website workflows have native implementations. Remaining phone and live-account testing is scheduled after release. AniList login needs a dedicated native client ID, and long-term signing is still pending. See [parity status](docs/PARITY.md).
 
-## In this native preview
+## Inside Astro
 
 | Experience | What is implemented |
 | :--- | :--- |
@@ -43,13 +43,13 @@ Native **Jetpack Compose** screens, **Room** local storage, **DataStore** prefer
 
 Artwork caches have explicit limits. Search is debounced, obsolete requests cancel, and discovery loads a page at a time. Reminder checks run roughly hourly when enabled and connected; Android may delay them to save power. Real-device measurements are still needed before claiming lower battery or memory usage. [Android background-work guidance](https://developer.android.com/develop/background-work/background-tasks/persistent).
 
-## Try a development build
+## Download Astro 1.0
 
-**[Download the verified preview APK ZIP](https://github.com/Bandit4420/Astro/actions/runs/34679645728/artifacts/10293957109)** · [Build verification](docs/BUILD_VERIFICATION.md)
+**[Download Astro 1.0](https://github.com/Bandit4420/Astro/releases/tag/v1.0)** · [Release notes](docs/releases/v1.0.md)
 
-Open [GitHub Actions](https://github.com/Bandit4420/Astro/actions), select a **successful Android preview run**, and download its APK artifact. Extract the ZIP to find `app-debug.apk` and its SHA-256 checksum. Private repository access is required. The presence of workflow source alone does not mean a successful APK is available.
+Download `Astro-1.0.apk` from Assets. Android 12+ and private repository access are required.
 
-These are debug builds with temporary signing identities; a later build may require uninstalling the old one and losing its local data. Backups are implemented in 0.2. Version 0.1 has no export screen: do not uninstall it if you need its local data. Keep your main collection on AniList while live sync validation is pending.
+This is a regular GitHub release built with the existing debug signing pipeline. Signing identities can differ between clean CI runners, so seamless upgrades are not guaranteed. Export a backup from 0.2 before installing. Version 0.1 has no export screen: do not uninstall it if you need its local progress.
 
 To build locally:
 
@@ -73,15 +73,16 @@ Requires JDK 17 and Android SDK 35. See [development notes](docs/DEVELOPMENT.md)
 - [x] Port OP/ED credits, quiz, advanced filters, profile charts, chibi notices and personal tools.
 - [x] Add native/web backup interchange and account-bound imports.
 - [ ] Backup/export, accessibility checks and measured battery/memory profiling.
-- [ ] Stable release signing and APK distribution through GitHub Releases.
+- [x] APK distribution through GitHub Releases.
+- [ ] Long-term release signing for seamless updates.
 
 ## APK releases
 
-**No production release yet.** Stable releases will include a signed APK, version information, checksum and changelog. Signing keys stay outside Git. Releases in this private repository are available only to people with repository read access. [About GitHub Releases](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases).
+Version 1.0 is published as a regular release with an APK, version information, checksum and changelog. The regular-release label does not certify the remaining phone, live-account or battery checks. Signing keys stay outside Git. Releases in this private repository require repository read access.
 
 ## Credits
 
-Made for **Bandit**. Powered by **AniList**. Anime/manga artwork and characters belong to their respective owners. Astro is an independent project. The website's song credits use Jikan; those credits are not yet ported to this native preview.
+Made for **Bandit**. Powered by **AniList**. Anime/manga artwork and characters belong to their respective owners. Astro is an independent project. Song credits are provided through Jikan where available.
 
 <div align="center">
 

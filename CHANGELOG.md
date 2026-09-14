@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0 — 14 September 2026
+
+- Publish the native app as a regular GitHub release, tagged v1.0 and marked Latest.
+- Set the installed app version to 1.0.0 and increment Android versionCode to 3.
+- Retain the 0.2 feature set and package identity. No new behavior changes in this release.
+- Build and verify the APK version, signature and checksum before publishing; additional phone and live-account tests are deferred until after release at the owner's request.
+- Existing debug signing remains in use. Long-term signing, native OAuth configuration and device acceptance remain pending; export a 0.2 backup before an install that could require reinstalling.
+
 ## 0.2.0-preview — Native website workflows
 
 - AniList browser OAuth with state validation, encrypted token storage and verified Viewer identity. Requires separate native client configuration.

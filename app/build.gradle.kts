@@ -11,12 +11,13 @@ android {
         applicationId = "com.bandit.astro"
         minSdk = 31
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0-preview"
+        versionCode = 3
+        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
-        debug { applicationIdSuffix = ".preview"; versionNameSuffix = "-debug" }
+        // Keep the existing package identity for local database continuity.
+        debug { applicationIdSuffix = ".preview" }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
