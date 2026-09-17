@@ -185,7 +185,10 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
     fun filter(value:ExploreFilters) { discoverJob?.cancel(); _discovery.value=Discovery(catalog=_discovery.value.catalog,search=_discovery.value.search,filters=value);loadDiscovery() }
     fun studioSearch(value:String) { studioJob?.cancel(); studioJob=viewModelScope.launch { delay(400);try { studios.value=if(value.trim().length<2) emptyList() else app.api.studios(value.trim()) } catch(e:CancellationException){throw e} catch(_:Exception){studios.value=emptyList()} } }
     fun clientId()=app.account.clientId
-    fun beginLogin(id:String): Uri { app.account.clientId=id.trim(); return app.account.begin() }
+    fun beginLogin(id:String?=null): Uri {
+        if(id!=null) app.account.clientId=id.trim()
+        return app.account.begin(useWebsite=id==null)
+    }
     fun finishLogin(uri:Uri) = task {
         val response=app.account.callback(uri)
         val viewer=app.api.viewer(response.token)

@@ -50,10 +50,12 @@ class AccountStore(context: Context) {
     var clientId: String
         get() = prefs.getString("client", "").orEmpty()
         set(value) { require(value.matches(Regex("[0-9]{1,12}"))); prefs.edit().putString("client", value).commit() }
-    fun begin(): Uri {
-        require(clientId.isNotBlank()) { "Configure the native AniList client ID first." }
+    fun begin(useWebsite: Boolean = true): Uri {
+        require(useWebsite || clientId.isNotBlank()) { "Configure the native AniList client ID first." }
         val nonce = ByteArray(32).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
         check(prefs.edit().putString("state", nonce).putLong("created", System.currentTimeMillis()).commit())
+        if (useWebsite) return Uri.parse("https://astro-anime-bandit.bandit44.chatgpt.site/auth/android").buildUpon()
+            .encodedFragment("state=$nonce").build()
         return Uri.parse("https://anilist.co/api/v2/oauth/authorize").buildUpon().appendQueryParameter("client_id", clientId)
             .appendQueryParameter("response_type", "token").appendQueryParameter("state", nonce).build()
     }

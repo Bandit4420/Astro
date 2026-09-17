@@ -33,7 +33,8 @@ class NativeSmokeTest {
         compose.onNodeWithText("Make yourself at home").assertExists();screenshot("04-settings")
         compose.onNodeWithContentDescription("Profile & sign in").performClick()
         compose.onNodeWithText("AniList account").assertExists()
-        compose.onNodeWithText("Set up native login").performClick()
+        compose.onNodeWithText("Sign in with AniList").assertIsEnabled()
+        compose.onNodeWithText("Advanced login settings").performClick()
         compose.onNodeWithText("Native client ID").assertExists();screenshot("05-account")
     }
 }
