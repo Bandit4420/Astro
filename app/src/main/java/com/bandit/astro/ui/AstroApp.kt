@@ -71,7 +71,7 @@ fun AstroApp(model: AstroViewModel, notificationId: Int, consumed: () -> Unit) {
         }
         Box(Modifier.fillMaxSize()) {
         AmbientBackdrop(preferences,detail.value?.media?.banner.orEmpty())
-        Scaffold(containerColor = Color.Transparent,
+        Scaffold(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground,
             snackbarHost = { SnackbarHost(snackbar) { ChibiSnackbar(it) } },
             topBar = {
                 TopAppBar(title = {

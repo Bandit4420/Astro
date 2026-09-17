@@ -1,17 +1,13 @@
-# AniList Android setup
+# AniList Android login
 
-Keep the website client **50387** unchanged. The Android app needs a separate native redirect.
+Since 1.0.1, normal login requires no user-provided client ID.
 
-1. Open https://anilist.co/settings/developer as the app owner.
-2. Create **Astro Android** with redirect URI **`astro://oauth/anilist`**.
-3. In Astro → Profile → Set up native login, enter the new **public client ID**.
-4. Tap Save & sign in, approve on AniList, then return to Astro. Do not enter a client secret.
-5. Tap Sync now to import anime and manga lists. Enable Auto-sync when ready.
+Open Profile → Sign in with AniList → Continue with AniList in the browser → authorize → Open Astro → Sync now. Auto-sync can then be enabled.
 
-The implicit flow is AniList's documented approach for mobile clients and does not ship a client secret. See https://github.com/AniList/docs/blob/master/docs/guide/auth/index.md and https://github.com/AniList/docs/blob/master/docs/guide/auth/implicit.md.
+Astro starts https://astro-anime-bandit.bandit44.chatgpt.site/auth/android with a random app state in the URL fragment. The browser creates a separate tab-bound OAuth state and uses the website's existing AniList client. Its registered callback validates that browser state and returns only to the fixed astro://oauth/anilist endpoint. The app validates its own single-use state and expiry and verifies AniList Viewer before saving a session. Tokens are not sent in HTTP query strings or stored in a web session by the Android handoff. They are encrypted with Android Keystore on the phone.
 
-A custom redirect and random state mitigate accidental/malicious callbacks. AniList does not currently offer refresh tokens in its documented authentication flow. Reauthentication is required after expiry. Tokens are stored as AES-GCM ciphertext using an Android Keystore key; platform backup is disabled.
+The website handoff must stay available. Website client 50387 and its registered redirect are unchanged. No client secret is shipped.
 
-Account libraries are separate databases (`astro-account-ID.db`). Guest progress remains in `astro.db` and is never silently uploaded to a new account. Import/export is account-bound. Private notes remain local and are excluded from AniList mutations.
+For a separately registered Android client, Advanced login settings still supports a public client ID with redirect astro://oauth/anilist. This is optional.
 
-Sync fetches both complete list collections, checks the authenticated Viewer, uploads dirty records with revision acknowledgements, and merges clean remote records. Changed remote progress triggers a user choice; no automatic last-write-wins. WorkManager requires connectivity and uses backoff for transient failures; the OS may delay background work.
+Account libraries remain separate; guest data is retained, public profile lookups do not sign in, and private notes are excluded from AniList mutations. Live account and phone verification remain necessary.

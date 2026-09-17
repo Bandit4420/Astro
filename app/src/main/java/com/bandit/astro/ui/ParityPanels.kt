@@ -69,10 +69,10 @@ import java.time.*
         SectionTitle("AniList account",account?.name ?: "Sign in to track your own AniList account")
         if(account==null) {
             Text("Sign in through AniList in your browser. Public profile searches never grant account access.",fontSize=13.sp)
-            if(client.isNotBlank()) Button(onClick={try {context.startActivity(Intent(Intent.ACTION_VIEW,m.beginLogin(client)))} catch(e:Exception){m.announce(e.message ?: "Could not open sign-in.")} }) {Text("Sign in with AniList")}
-            TextButton(onClick={showSetup=!showSetup}) {Text(if(client.isBlank()) "Set up native login" else "Native login settings")}
+            Button(onClick={try {context.startActivity(Intent(Intent.ACTION_VIEW,m.beginLogin()))} catch(e:Exception){m.announce(e.message ?: "Could not open sign-in.")} }) {Text("Sign in with AniList")}
+            TextButton(onClick={showSetup=!showSetup}) {Text("Advanced login settings")}
             if(showSetup) {
-                Text("Create a separate AniList application named Astro Android with redirect URI astro://oauth/anilist. Enter its public client ID here. Keep the website's application unchanged.",fontSize=13.sp)
+                Text("Optional: use your own AniList Android client with redirect URI astro://oauth/anilist. Normal sign-in above needs no setup.",fontSize=13.sp)
                 TextButton(onClick={openLink(context,"https://anilist.co/settings/developer")}) {Text("AniList developer settings ↗")}
                 OutlinedTextField(client,{client=it.filter(Char::isDigit).take(12)},label={Text("Native client ID")},singleLine=true)
                 Button(onClick={try {context.startActivity(Intent(Intent.ACTION_VIEW,m.beginLogin(client)))} catch(e:Exception){m.announce(e.message ?: "Could not start sign-in.")} },enabled=client.isNotBlank()) {Text("Save & sign in")}
