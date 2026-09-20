@@ -32,7 +32,7 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
 }
 @Composable internal fun ProfileScreen(m:AstroViewModel) {
     val profile by m.profile.collectAsStateWithLifecycle();val error by m.profileError.collectAsStateWithLifecycle();val account by m.account.collectAsStateWithLifecycle()
-    LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(22.dp)) {
+    LazyColumn(contentPadding=pagePadding(),verticalArrangement=Arrangement.spacedBy(22.dp)) {
         item {AccountPanel(m)}
         val user=profile?.takeIf {it.id==account?.id}
         if(user!=null) {
@@ -66,7 +66,7 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
     val owned by m.ownedHistory.collectAsStateWithLifecycle();val account by m.account.collectAsStateWithLifecycle();val history=owned.takeIf {it.owner==(account?.id ?: 0)}?.events.orEmpty();var period by rememberSaveable{mutableStateOf("This month")};val zone=ZoneId.systemDefault();val today=LocalDate.now(zone)
     val start=when(period){"This month"->today.withDayOfMonth(1);"This year"->today.withDayOfYear(1);else->LocalDate.of(1970,1,1)}.atStartOfDay(zone).toInstant().toEpochMilli()
     val events=history.filter {it.at>=start};val rated=entries.filter {it.score>0}
-    LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(24.dp)) {
+    LazyColumn(contentPadding=pagePadding(),verticalArrangement=Arrangement.spacedBy(24.dp)) {
         item {SectionTitle("Astro stats","Your collection at a glance")}
         item {Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Stat("${entries.count {it.status=="COMPLETED"}}","completed",Modifier.weight(1f));Stat("${entries.filter {it.type=="ANIME"}.sumOf {it.progress.toLong()*it.duration}/60}h","tracked runtime",Modifier.weight(1f));Stat(if(rated.isEmpty()) "—" else "${rated.map {it.score}.average().toInt()}","mean rating",Modifier.weight(1f))}}
         item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){SectionTitle("Collection status");RankChart(entries.groupingBy {it.status.pretty()}.eachCount().toList().sortedByDescending {it.second})}}
@@ -88,7 +88,7 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
     var rounds by remember {mutableStateOf<List<QuizRound>>(emptyList())};var index by rememberSaveable{mutableIntStateOf(0)};var answer by rememberSaveable{mutableStateOf("")};var score by rememberSaveable{mutableIntStateOf(0)}
     var wins by remember{mutableIntStateOf(records.wins())};var streak by remember{mutableIntStateOf(records.streak())}
     val done=rounds.isNotEmpty() && index>=rounds.size
-    LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
+    LazyColumn(contentPadding=pagePadding(),verticalArrangement=Arrangement.spacedBy(20.dp)) {
         item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){Chibi(Modifier.size(84.dp));SectionTitle("Anime Quiz","Guess stories from covers, clues or metadata. No plot trivia.")}}
         if(rounds.isEmpty()) {
             item {TextButton(onClick={m.loadQuizPool(catalog)},enabled=!loading) {Text("Refresh quiz titles")}}
@@ -114,7 +114,7 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
 @Composable internal fun RouletteScreen(entries:List<LibraryEntry>,m:AstroViewModel) {
     var genre by rememberSaveable{mutableStateOf("")};var time by rememberSaveable{mutableStateOf("")};var pick by remember{mutableStateOf<LibraryEntry?>(null)}
     val genres=entries.flatMap {it.genres.split("|").filter(String::isNotBlank)}.distinct().sorted()
-    LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
+    LazyColumn(contentPadding=pagePadding(),verticalArrangement=Arrangement.spacedBy(20.dp)) {
         item {SectionTitle("Let your orbit choose","Pick a title from Plan to watch / read")}
         item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){Choice("Mood / genre",genre,genres){genre=it};Choice("Minutes for one episode",time,listOf("15","25","45","90","180")){time=it}}}
         item {AstroButton(onClick={pick=entries.filter {it.status=="PLANNING" && (genre.isBlank()||genre in it.genres.split("|")) && (time.isBlank()||it.type=="ANIME" && it.duration>0 && it.duration<=(time.toIntOrNull() ?: 0))}.randomOrNull();if(pick==null)m.announce("No planned titles match those filters.")}) {Text("Spin my orbit")}}
@@ -123,7 +123,7 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
 }
 @Composable internal fun CompatibilityScreen(entries:List<LibraryEntry>,m:AstroViewModel) {
     var name by rememberSaveable{mutableStateOf("")};val result by m.comparison.collectAsStateWithLifecycle();val error by m.comparisonError.collectAsStateWithLifecycle()
-    LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(18.dp)) {
+    LazyColumn(contentPadding=pagePadding(),verticalArrangement=Arrangement.spacedBy(18.dp)) {
         item {SectionTitle("Two orbits, shared stories","Compare a public AniList profile. This does not sign in as them.")}
         item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){OutlinedTextField(name,{name=it.take(100)},label={Text("AniList username")},singleLine=true);AstroButton(onClick={m.compare(name)},enabled=name.isNotBlank()){Text("Compare tastes")}}}
         if(error.isNotBlank())item {Text(error,color=MaterialTheme.colorScheme.error)}
@@ -140,7 +140,7 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
     val points=remember(stars){stars.mapIndexed {i,e->val group=(genres.indexOf(e.genres.substringBefore("|")).coerceAtLeast(0)%8);val theta=group*2*PI/8;val r=.1+(i%6)*.019
         Offset((.5+cos(theta)*.28+cos(i*2.4)*r).toFloat(),(.5+sin(theta)*.28+sin(i*2.4)*r).toFloat())}}
     val accent=MaterialTheme.colorScheme.primary
-    LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(18.dp)) {
+    LazyColumn(contentPadding=pagePadding(),verticalArrangement=Arrangement.spacedBy(18.dp)) {
         item {SectionTitle("Anime constellations","Up to 240 collection stars · grouped by first genre · size follows your rating")}
         item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){OutlinedTextField(search,{search=it},label={Text("Find a star")},modifier=Modifier.fillMaxWidth());Text("Zoom · ${"%.1f".format(zoom)}×");Slider(zoom,{zoom=it},valueRange=1f..2.5f)}}
         item {BoxWithConstraints(Modifier.fillMaxWidth().height(360.dp)){val width=maxWidth;Box(Modifier.horizontalScroll(rememberScrollState()).verticalScroll(rememberScrollState())){Canvas(Modifier.width(width*zoom).height(360.dp*zoom).background(MaterialTheme.colorScheme.surfaceVariant,MaterialTheme.shapes.large).pointerInput(points){detectTapGestures {tap->val index=points.indices.minByOrNull {i->(Offset(points[i].x*size.width,points[i].y*size.height)-tap).getDistance()};if(index!=null)selected=stars[index].mediaId}}) {

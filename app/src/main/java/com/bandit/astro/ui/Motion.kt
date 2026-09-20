@@ -64,3 +64,8 @@ private tailrec fun Context.hostActivity():Activity? = when(this) {
     is android.content.ContextWrapper -> baseContext.hostActivity()
     else -> null
 }
+
+// Keep the final row reachable while allowing scrolling content behind the floating glass bar.
+internal val LocalBottomInset=staticCompositionLocalOf {0.dp}
+@Composable internal fun pagePadding():androidx.compose.foundation.layout.PaddingValues =
+    androidx.compose.foundation.layout.PaddingValues(start=20.dp,top=20.dp,end=20.dp,bottom=20.dp+LocalBottomInset.current)

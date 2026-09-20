@@ -41,6 +41,7 @@ class NativeSmokeTest {
             app.preferences.text("buttonAccent","#FFB5D0");app.preferences.text("navigationAccent","#C8B5FF")
         }
         compose.waitUntil(5000) {compose.onAllNodesWithTag("appearance:Liquid Glass:false").fetchSemanticsNodes().isNotEmpty()}
+        compose.onNodeWithTag("settings-list").performTouchInput {swipeUp()}
         screenshot("06-liquid-glass")
         kotlinx.coroutines.runBlocking {app.preferences.flag("amoled",true)}
         compose.waitUntil(5000) {compose.onAllNodesWithTag("appearance:Liquid Glass:true").fetchSemanticsNodes().isNotEmpty()}

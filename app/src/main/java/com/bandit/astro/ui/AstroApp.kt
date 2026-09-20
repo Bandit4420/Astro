@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -125,7 +126,8 @@ fun AstroApp(model: AstroViewModel, notificationId: Int, consumed: () -> Unit) {
             }
         ) { padding ->
             val route="${person?.id ?: 0}:${detail.id}:$extra:$tab"
-            Box(Modifier.fillMaxSize().then(if(glass)Modifier.hazeSource(haze,zIndex=1f) else Modifier).padding(padding).pageEntrance(route,effective.animations)) {
+            CompositionLocalProvider(LocalBottomInset provides padding.calculateBottomPadding()) {
+            Box(Modifier.fillMaxSize().then(if(glass)Modifier.hazeSource(haze,zIndex=1f) else Modifier).padding(top=padding.calculateTopPadding()).pageEntrance(route,effective.animations)) {
                 when {
                     person != null -> PersonScreen(person!!, detail.value?.characters.orEmpty(), preferences.spoilers, model)
                     detail.id > 0 -> DetailScreen(detail, library.firstOrNull { it.mediaId == detail.id }, preferences.spoilers, model)
@@ -136,7 +138,7 @@ fun AstroApp(model: AstroViewModel, notificationId: Int, consumed: () -> Unit) {
                     tab == 3 -> ScheduleScreen(schedule, library, preferences, model)
                     else -> SettingsScreen(preferences, model) { extra=it }
                 }
-            }
+            } }
         }
     }
 }
@@ -149,7 +151,7 @@ internal fun OrbitScreen(library: List<LibraryEntry>, discovery: Discovery, mode
     val spotlight by model.spotlight.collectAsStateWithLifecycle()
     val current = library.filter { it.status in listOf("CURRENT","REPEATING") }
     val minutes = library.filter { it.type == "ANIME" }.sumOf { it.progress.toLong() * it.duration }
-    LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+    LazyColumn(contentPadding = pagePadding(), verticalArrangement = Arrangement.spacedBy(22.dp)) {
         item { Column {
             Eyebrow("MISSION CONTROL")
             Text(account?.name?.let { "Good ${if(LocalTime.now().hour<12) "morning" else if(LocalTime.now().hour<18) "afternoon" else "evening"}, $it." } ?: "A little space for\nyour stories.", fontSize = 34.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
@@ -203,7 +205,7 @@ internal fun ExploreScreen(state: Discovery, model: AstroViewModel) {
         }
         ExploreFilterPanel(state,model)
         LazyVerticalGrid(columns = GridCells.Adaptive(145.dp), state = grid,
-            contentPadding = PaddingValues(20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            contentPadding = pagePadding(), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             items(state.items, key = { it.id }) { media -> Column {
                 MediaCard(media) { model.open(media.id) }
                 TextButton(onClick={model.add(media)},enabled=media.id !in ids){Text(if(media.id in ids) "✓ In collection" else "+ Add to collection")}
@@ -230,7 +232,7 @@ internal fun CollectionScreen(library: List<LibraryEntry>, model: AstroViewModel
     var filter by rememberSaveable { mutableStateOf("ALL") }
     var catalog by rememberSaveable {mutableStateOf("All")};var search by rememberSaveable {mutableStateOf("")};var sort by rememberSaveable {mutableStateOf("Recently updated")}
     val entries=remember(library,catalog,filter,search,sort){collectionView(library,catalog,filter,search,sort)}
-    LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    LazyColumn(contentPadding = pagePadding(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { SectionTitle("Your collection", "${library.size} stories · changes saved on device") }
         item { LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(listOf("ALL", "CURRENT", "PLANNING", "COMPLETED", "PAUSED", "DROPPED", "REPEATING")) { status ->
@@ -282,7 +284,7 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
     val appearance=LocalAppearance.current
     val language by model.castLanguage.collectAsStateWithLifecycle()
     if (media == null) { if (state.error != null) ErrorNotice(state.error) { model.open(state.id) } else Loading(); return }
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(22.dp), contentPadding = PaddingValues(bottom = 28.dp)) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(22.dp), contentPadding = PaddingValues(bottom = 28.dp+LocalBottomInset.current)) {
         item {
             Box(Modifier.fillMaxWidth().height(340.dp)) {
                 if(appearance.artwork) Cover(media.banner.ifBlank { media.cover }, "", Modifier.fillMaxSize(), rounded = false)
@@ -372,7 +374,7 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
 internal fun PersonScreen(state: PersonState, cast: List<CastMember>, spoilers: Boolean, model: AstroViewModel) {
     var revealed by rememberSaveable(state.id, spoilers) { mutableStateOf(false) }
     val person = state.value
-    LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+    LazyColumn(contentPadding = pagePadding(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         if (person == null) item { if (state.error != null) ErrorNotice(state.error) { model.openPerson(state.id, state.staff) } else Loading() }
         else {
             item {PersonHeader(person,state.staff)}
@@ -410,7 +412,7 @@ internal fun ScheduleScreen(state: ScheduleState, library: List<LibraryEntry>, p
     val ids = remember(library) { library.map { it.mediaId }.toSet() }
     val now=rememberMinute()
     val episodes = state.items.filter { Instant.ofEpochSecond(it.airingAt).atZone(zone).toLocalDate() == date && (!onlyMine || it.media.id in ids) }
-    LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    LazyColumn(contentPadding = pagePadding(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { SectionTitle("This week in your universe", "${monday.format(DateTimeFormatter.ofPattern("d MMM"))} – ${monday.plusDays(6).format(DateTimeFormatter.ofPattern("d MMM"))} · ${zone.id}") }
         item { Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
             TextButton(onClick={offset--}) { Text("← Previous") }; TextButton(onClick={offset=0}) { Text("This week") };TextButton(onClick={offset++}) { Text("Next →") }
@@ -449,7 +451,7 @@ internal fun ScheduleScreen(state: ScheduleState, library: List<LibraryEntry>, p
 internal fun SettingsScreen(preferences: Preferences, model: AstroViewModel, tool:(String)->Unit) {
     val context = LocalContext.current
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> model.flag("reminders", granted) }
-    LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+    LazyColumn(modifier=Modifier.testTag("settings-list"),contentPadding = pagePadding(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item { SectionTitle("Make yourself at home", "Small details. Your kind of universe.") }
         item { OrbitToolsRow(tool) }
         item { AppearanceStudio(preferences,model) }
