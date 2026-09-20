@@ -192,7 +192,7 @@ internal fun ExploreScreen(state: Discovery, model: AstroViewModel) {
     }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 20.dp)) {
-            Text("A whole world awaits", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+            Text("A whole world awaits", style=MaterialTheme.typography.headlineMedium)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(Catalog.entries) { catalog -> FilterChip(selected = state.catalog == catalog,
                     onClick = { model.search("", catalog) }, label = { Text(catalog.label) }) }
@@ -238,7 +238,11 @@ internal fun CollectionScreen(library: List<LibraryEntry>, model: AstroViewModel
             }
         } }
         item {LazyRow(horizontalArrangement=Arrangement.spacedBy(8.dp)){items(listOf("All","Anime","Manga","Novels")){kind->FilterChip(selected=catalog==kind,onClick={catalog=kind},label={Text(kind)})}}}
-        item {OutlinedTextField(search,{search=it},label={Text("Search your collection")},singleLine=true,modifier=Modifier.fillMaxWidth());Choice("Sort collection",sort,listOf("Recently updated","Title A–Z","Highest score")){sort=it.ifBlank {"Recently updated"}};Text("${entries.size} matching stories",fontSize=12.sp)}
+        item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            OutlinedTextField(search,{search=it},label={Text("Search your collection")},singleLine=true,modifier=Modifier.fillMaxWidth())
+            Choice("Sort collection",sort,listOf("Recently updated","Title A–Z","Highest score")){sort=it.ifBlank {"Recently updated"}}
+            Text("${entries.size} matching stories",style=MaterialTheme.typography.bodySmall)
+        }}
         if (entries.isEmpty()) item { Notice("Room for a new story", "Add titles from Explore to start your collection.") }
         items(entries, key = { it.mediaId }) { EntryRow(it, model) }
     }
@@ -287,7 +291,7 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
                     Cover(media.cover, media.title, Modifier.width(104.dp).height(152.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Eyebrow(listOf(media.format.pretty(), media.year.takeIf { it > 0 }?.toString().orEmpty()).filter { it.isNotBlank() }.joinToString(" · "))
-                        Text(media.title, fontSize = 25.sp, lineHeight = 29.sp, fontWeight = FontWeight.Bold, maxLines = 5, overflow = TextOverflow.Ellipsis)
+                        Text(media.title, style=MaterialTheme.typography.headlineMedium, maxLines = 5, overflow = TextOverflow.Ellipsis)
                         if (media.nativeTitle.isNotBlank()) Text(media.nativeTitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -371,11 +375,7 @@ internal fun PersonScreen(state: PersonState, cast: List<CastMember>, spoilers: 
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         if (person == null) item { if (state.error != null) ErrorNotice(state.error) { model.openPerson(state.id, state.staff) } else Loading() }
         else {
-            item { Cover(person.image, person.name, Modifier.width(200.dp).height(260.dp)) }
-            item { Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                Text(person.name, style=MaterialTheme.typography.headlineLarge)
-                if(person.nativeName.isNotBlank())Text(person.nativeName,color=MaterialTheme.colorScheme.onSurfaceVariant)
-            } }
+            item {PersonHeader(person,state.staff)}
             if(!spoilers||revealed)item { PersonFacts(person.facts) }
             item {
                 if (spoilers && !revealed) Notice("Biography hidden", "Biographies may mention events beyond your progress.", "Reveal biography", { revealed = true })
@@ -529,7 +529,7 @@ internal fun Stat(value: String, label: String, modifier: Modifier) {
     Surface(modifier, shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primaryContainer) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            Text(label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(label, style=MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

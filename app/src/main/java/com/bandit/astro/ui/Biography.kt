@@ -13,6 +13,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import io.noties.markwon.Markwon
+import io.noties.markwon.AbstractMarkwonPlugin
+import io.noties.markwon.MarkwonConfiguration
 import io.noties.markwon.html.HtmlPlugin
 import io.noties.markwon.linkify.LinkifyPlugin
 
@@ -21,7 +23,11 @@ import io.noties.markwon.linkify.LinkifyPlugin
     val renderer=remember(context) { Markwon.builder(context)
         .usePlugin(HtmlPlugin.create())
         .usePlugin(LinkifyPlugin.create(android.text.util.Linkify.WEB_URLS))
-        .linkResolver { _, link -> openLink(context, link) }.build() }
+        .usePlugin(object:AbstractMarkwonPlugin() {
+            override fun configureConfiguration(builder:MarkwonConfiguration.Builder) {
+                builder.linkResolver { _,link -> openLink(context,link) }
+            }
+        }).build() }
     // AniList treats single newlines as explicit line breaks, unlike CommonMark.
     val content=remember(value,renderer) {renderer.toMarkdown(value.replace("\r\n","\n").replace("\n","  \n"))}
     val textColor=MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
@@ -46,6 +52,19 @@ import io.noties.markwon.linkify.LinkifyPlugin
                     Text(value,style=MaterialTheme.typography.bodyMedium,fontWeight=FontWeight.Medium)
                 }
                 if(index<facts.lastIndex)HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant.copy(alpha=.35f))
+            }
+        }
+    }
+}
+
+@Composable internal fun PersonHeader(person:com.bandit.astro.data.Person,staff:Boolean) {
+    Surface(shape=MaterialTheme.shapes.large,color=MaterialTheme.colorScheme.surfaceContainer) {
+        Row(Modifier.fillMaxWidth().padding(16.dp),horizontalArrangement=Arrangement.spacedBy(18.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
+            Cover(person.image,person.name,Modifier.width(112.dp).height(166.dp))
+            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                Eyebrow(if(staff) "STAFF & VOICES" else "CHARACTER")
+                Text(person.name,style=MaterialTheme.typography.headlineMedium)
+                if(person.nativeName.isNotBlank())Text(person.nativeName,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

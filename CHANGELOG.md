@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0 — Make yourself at home
+
+- Repair overlapping biography facts and restore native formatted, clickable links.
+- Add voice portraits, automatic cached OP/ED loading and clear retry states.
+- Reduce calendar query size and omit absent filters; separate profile sections and type-appropriate statistics.
+- Redesign theme previews, grouped settings, floating navigation and typography. Independent AMOLED, interface/button/navigation accents and heading styles.
+- Haze navigation blur on supported devices, Android 12 translucent fallback, page/button motion and optional high-refresh request.
+- Pause countdowns in background, respect Battery Saver, cache music and remove duplicate discovery fetch.
+- Add Android 12/15 UI checks and API regression tests. See [release notes](docs/releases/v1.2.0.md) for limitations and reference credits.
+
 ## 1.1.1 — Discovery request hardening
 
 - Omit unset GraphQL filter arguments and distinguish HTTP 403 from expired login.
