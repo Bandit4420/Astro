@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import coil.compose.AsyncImage
 import com.bandit.astro.*
 import com.bandit.astro.R
@@ -39,24 +40,29 @@ import java.time.*
         }
     }
 }
-@Composable internal fun AmbientBackdrop(p:Preferences,art:String) {
+@Composable internal fun AmbientBackdrop(p:Preferences,art:String,modifier:Modifier=Modifier) {
     val accent=MaterialTheme.colorScheme.primary
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        if(p.theme=="AMOLED") return@Box
+    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        if(p.amoled||p.theme=="AMOLED") return@Box
         val blurred=if(p.blur) Modifier.blur(p.blurAmount.dp) else Modifier
         Box(Modifier.fillMaxSize().then(blurred).background(Brush.radialGradient(listOf(accent.copy(alpha=.2f),Color.Transparent)))) {
+            if(p.glass) Canvas(Modifier.fillMaxSize()) {
+                drawCircle(accent.copy(alpha=.11f),size.width*.45f,androidx.compose.ui.geometry.Offset(size.width*.9f,size.height*.25f))
+                drawCircle(Color(0xFFB7A6EE).copy(alpha=.08f),size.width*.55f,androidx.compose.ui.geometry.Offset(size.width*.1f,size.height*.75f))
+            }
             if(p.artwork && art.isNotBlank() && p.glass) AsyncImage(art,null,Modifier.fillMaxSize(),alpha=.25f,contentScale=androidx.compose.ui.layout.ContentScale.Crop)
         }
     }
 }
 @Composable internal fun AppearanceOptions(p:Preferences,m:AstroViewModel) {
-    ToggleRow("Liquid glass","Translucent surfaces with artwork behind them.",p.glass) {m.flag("glass",it)}
-    ToggleRow("Backdrop blur","Blur the decorative background while keeping text sharp.",p.blur) {m.flag("blur",it)}
+    ToggleRow("Liquid Glass","Translucent surfaces with artwork behind them.",p.glass) {m.flag("glass",it)}
+    ToggleRow("Backdrop blur","Frost navigation and artwork while keeping text sharp. Android 12 uses a translucent navigation fallback.",p.blur) {m.flag("blur",it)}
     if(p.blur) { Text("Blur strength · ${p.blurAmount.toInt()}");Slider(p.blurAmount,{m.number("blurAmount",it)},valueRange=0f..32f) }
     if(p.glass) {Text("Glass opacity · ${(p.transparency*100).toInt()}%");Slider(p.transparency,{m.number("transparency",it)},valueRange=.35f..1f)}
     ToggleRow("Background artwork","Show title banners and artwork behind glass.",p.artwork) {m.flag("artwork",it)}
-    ToggleRow("Image transitions","Fade artwork as it loads.",p.animations) {m.flag("animations",it)}
+    ToggleRow("Animations","Smooth page entrances, button presses and artwork fades.",p.animations) {m.flag("animations",it)}
     ToggleRow("Compact covers","Shorter cover cards in discovery.",p.compact) {m.flag("compact",it)}
+    ToggleRow("High refresh rate","Request your display's fastest mode while Astro is open. May use more battery; Android has the final say.",p.highRefresh) {m.flag("highRefresh",it)}
     Text("Cover radius · ${p.radius.toInt()}");Slider(p.radius,{m.number("radius",it)},valueRange=0f..32f)
 }
 @Composable internal fun AccountPanel(m:AstroViewModel) {
@@ -69,19 +75,19 @@ import java.time.*
         SectionTitle("AniList account",account?.name ?: "Sign in to track your own AniList account")
         if(account==null) {
             Text("Sign in through AniList in your browser. Public profile searches never grant account access.",fontSize=13.sp)
-            Button(onClick={try {context.startActivity(Intent(Intent.ACTION_VIEW,m.beginLogin()))} catch(e:Exception){m.announce(e.message ?: "Could not open sign-in.")} }) {Text("Sign in with AniList")}
+            AstroButton(onClick={try {context.startActivity(Intent(Intent.ACTION_VIEW,m.beginLogin()))} catch(e:Exception){m.announce(e.message ?: "Could not open sign-in.")} }) {Text("Sign in with AniList")}
             TextButton(onClick={showSetup=!showSetup}) {Text("Advanced login settings")}
             if(showSetup) {
                 Text("Optional: use your own AniList Android client with redirect URI astro://oauth/anilist. Normal sign-in above needs no setup.",fontSize=13.sp)
                 TextButton(onClick={openLink(context,"https://anilist.co/settings/developer")}) {Text("AniList developer settings ↗")}
                 OutlinedTextField(client,{client=it.filter(Char::isDigit).take(12)},label={Text("Native client ID")},singleLine=true)
-                Button(onClick={try {context.startActivity(Intent(Intent.ACTION_VIEW,m.beginLogin(client)))} catch(e:Exception){m.announce(e.message ?: "Could not start sign-in.")} },enabled=client.isNotBlank()) {Text("Save & sign in")}
+                AstroButton(onClick={try {context.startActivity(Intent(Intent.ACTION_VIEW,m.beginLogin(client)))} catch(e:Exception){m.announce(e.message ?: "Could not start sign-in.")} },enabled=client.isNotBlank()) {Text("Save & sign in")}
             }
         } else {
             Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {Cover(account!!.avatar,account!!.name,Modifier.size(52.dp));Text(account!!.name,fontWeight=FontWeight.Bold)}
             Text(sync.message.ifBlank { "Ready to import and sync your AniList collection." },fontSize=13.sp)
             if(sync.running) LinearProgressIndicator(Modifier.fillMaxWidth())
-            Row {Button(onClick={m.sync()},enabled=!sync.running) {Text("Sync now")};TextButton(onClick={confirm="logout"}) {Text("Sign out")}}
+            Row {AstroButton(onClick={m.sync()},enabled=!sync.running) {Text("Sync now")};TextButton(onClick={confirm="logout"}) {Text("Sign out")}}
             ToggleRow("Auto-sync","Queue edits after a short delay; refresh hourly when Android allows. Requires internet.",p.autoSync) {m.flag("autoSync",it)}
             if(sync.at>0) Text("Last synced ${Instant.ofEpochMilli(sync.at).atZone(ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("d MMM · h:mm a"))}",fontSize=12.sp)
             if(sync.conflict>0) Row {TextButton(onClick={confirm="local"}) {Text("Keep Astro progress")};TextButton(onClick={confirm="remote"}) {Text("Use AniList progress")}}
@@ -115,23 +121,25 @@ import java.time.*
     val launcher=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/calendar")) {uri->if(uri!=null) scope.launch {try {withContext(Dispatchers.IO){context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use {it.write(calendarFile(rows))} ?: error("Could not open calendar file.")};m.announce("Calendar exported")}catch(e:Exception){m.announce(e.message ?: "Export failed")}}}
     TextButton(onClick={launcher.launch("Astro-schedule.ics")},enabled=rows.isNotEmpty()) {Text("Export this week's calendar")}
 }
-@Composable internal fun ExpandableDescription(value:String) {var expanded by rememberSaveable(value){mutableStateOf(false)};Column {SectionTitle("About this story");Text(plainText(value).ifBlank {"No description available yet."},maxLines=if(expanded) Int.MAX_VALUE else 5,color=MaterialTheme.colorScheme.onSurfaceVariant);TextButton(onClick={expanded=!expanded}) {Text(if(expanded) "Show less" else "Read more")}}}
+@Composable internal fun ExpandableDescription(value:String) {var expanded by rememberSaveable(value){mutableStateOf(false)};Column {SectionTitle("About this story");BiographyText(value.ifBlank {"No description available yet."},maxLines=if(expanded) Int.MAX_VALUE else 5);TextButton(onClick={expanded=!expanded}) {Text(if(expanded) "Show less" else "Read more")}}}
 @Composable internal fun RichAbout(value:String,revealSpoilers:Boolean=false) {
     val context=LocalContext.current
     Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
         profileParts(value,revealSpoilers).forEach {(type,content)->
             if(type=="image")AsyncImage(content,"Profile image",Modifier.fillMaxWidth().heightIn(max=400.dp).clickable {openLink(context,content)})
-            else if(content.isNotBlank())Text(plainText(content),lineHeight=23.sp)
+            else if(content.isNotBlank())BiographyText(content)
         }
         if(value.isBlank())Text("No biography listed yet.")
     }
 }
 @Composable internal fun MusicPanel(media:Media,m:AstroViewModel) {
     val songs by m.songs.collectAsStateWithLifecycle();val error by m.songsError.collectAsStateWithLifecycle();val loading by m.songsLoading.collectAsStateWithLifecycle();val context=LocalContext.current
+    LaunchedEffect(media.id) { if(media.malId>0 && songs==null && error.isBlank())m.loadSongs() }
     Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
         SectionTitle("Opening & ending credits","MyAnimeList credits via Jikan")
         if(media.malId==0) Text("No song-credit mapping is available for this title.",fontSize=13.sp)
-        else if(songs==null) Button(onClick={m.loadSongs()},enabled=!loading) {Text(if(loading) "Loading OP & ED…" else "Load OP & ED")}
+        else if(loading) {LinearProgressIndicator(Modifier.fillMaxWidth());Text("Loading OP & ED…",style=MaterialTheme.typography.bodySmall)}
+        else if(songs==null) AstroOutlinedButton(onClick={m.loadSongs()}) {Text("Retry OP & ED")}
         if(error.isNotBlank())Text(error,color=MaterialTheme.colorScheme.error)
         songs?.let { data -> for((heading,rows) in listOf("Openings · OP" to data.first,"Endings · ED" to data.second)) {
             Text(heading,fontWeight=FontWeight.Bold)
@@ -169,7 +177,14 @@ import java.time.*
     val now=rememberMinute();val next=entries.filter {it.status=="CURRENT" && it.type=="ANIME" && it.nextAiring>now}.minByOrNull {it.nextAiring}
     if(next!=null) Notice("Next in your orbit", "${next.title} · Episode ${next.nextEpisode}\n${countdown(next.nextAiring,now)}","Open story",{m.open(next.mediaId)})
 }
-@Composable internal fun rememberMinute():Long {var now by remember{mutableLongStateOf(Instant.now().epochSecond)};LaunchedEffect(Unit){while(true){delay(60000);now=Instant.now().epochSecond}};return now}
+@Composable internal fun rememberMinute():Long {
+    var now by remember{mutableLongStateOf(Instant.now().epochSecond)}
+    val owner=androidx.lifecycle.compose.LocalLifecycleOwner.current
+    LaunchedEffect(owner){owner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+        while(true){now=Instant.now().epochSecond;delay(60000)}
+    }}
+    return now
+}
 internal fun countdown(at:Long,now:Long):String {val seconds=at-now;return if(seconds<=0)"Already aired" else "Airs in ${seconds/86400}d ${(seconds%86400)/3600}h ${(seconds%3600)/60}m"}
 
 @Composable internal fun OrbitSummary(entries:List<LibraryEntry>,m:AstroViewModel) {

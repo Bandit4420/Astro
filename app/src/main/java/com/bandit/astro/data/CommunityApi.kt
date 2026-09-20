@@ -12,7 +12,7 @@ data class ExploreFilters(val genre: String = "", val tag: String = "", val year
         .put("minEpisodes", minEpisodes.toIntOrNull()?.minus(1)).put("sort", JSONArray().put(sort))
 }
 data class UserProfile(val id: Int, val name: String, val avatar: String, val banner: String, val about: String,
-    val anime: JSONObject, val manga: JSONObject, val favorites: List<Media> = emptyList(), val characters: List<Credit> = emptyList(), val staff: List<Credit> = emptyList())
+    val anime: JSONObject, val manga: JSONObject, val favorites: List<Media> = emptyList(), val characters: List<Credit> = emptyList(), val staff: List<Credit> = emptyList(), val warnings: List<String> = emptyList())
 data class RemoteEntry(val entryId: Int, val entry: LibraryEntry)
 // Keep authentication independent of optional profile charts and favorite connections.
 suspend fun AniListApi.identity(token:String):UserProfile {
@@ -22,14 +22,28 @@ suspend fun AniListApi.identity(token:String):UserProfile {
 suspend fun AniListApi.viewer(token: String): UserProfile = profile(token = token)
 suspend fun AniListApi.profile(name: String? = null, token: String? = null): UserProfile {
     val field = if (name == null) "Viewer" else "User(name:${'$'}name)"
-    val stats = "count meanScore standardDeviation minutesWatched episodesWatched chaptersRead volumesRead statuses { status count } scores { score count } releaseYears { releaseYear count } genres(limit:8,sort:COUNT_DESC) { genre count minutesWatched }"
-    val d = query("query${if(name == null) "" else "(${'$'}name:String)"} { $field { id name avatar { large } bannerImage about favourites { anime(perPage:20) { nodes { ${AniListApi.MEDIA_FIELDS} isAdult } } characters(perPage:20) { nodes { id name { full } image { large } } } staff(perPage:20) { nodes { id name { full } image { large } } } } statistics { anime { $stats } manga { $stats } } } }",
-        JSONObject().put("name", name), token).getJSONObject(if (name == null) "Viewer" else "User")
-    return UserProfile(d.getInt("id"), d.text("name"), d.getJSONObject("avatar").text("large"), d.text("bannerImage"), d.text("about"),
-        d.optJSONObject("statistics")?.optJSONObject("anime") ?: JSONObject(), d.optJSONObject("statistics")?.optJSONObject("manga") ?: JSONObject(),
-        d.optJSONObject("favourites")?.optJSONObject("anime")?.optJSONArray("nodes")?.objects()?.filterNot { it.optBoolean("isAdult") }?.map(AniListApi::parseMedia).orEmpty(),
-        parseCredits(d.optJSONObject("favourites")?.optJSONObject("characters")?.optJSONArray("nodes")),
-        parseCredits(d.optJSONObject("favourites")?.optJSONObject("staff")?.optJSONArray("nodes")))
+    val root = if (name == null) "Viewer" else "User"
+    val declaration = if (name == null) "" else "(${'$'}name:String)"
+    val variables = JSONObject().apply { if(name != null) put("name",name) }
+    suspend fun section(selection:String) = query("query$declaration { $field { $selection } }",variables,token).getJSONObject(root)
+    val base = section("id name avatar { large } bannerImage about")
+    val warnings = mutableListOf<String>()
+    suspend fun optional(label:String, selection:String):JSONObject {
+        return try { section(selection) }
+        catch(e:kotlinx.coroutines.CancellationException) { throw e }
+        catch(e:java.io.IOException) { warnings += "$label unavailable: ${e.message}"; JSONObject() }
+    }
+    val common = "count meanScore standardDeviation statuses { status count } scores { score count } releaseYears { releaseYear count }"
+    val anime = optional("Anime statistics", "statistics { anime { $common minutesWatched episodesWatched genres(limit:8,sort:COUNT_DESC) { genre count minutesWatched } } }")
+        .optJSONObject("statistics")?.optJSONObject("anime") ?: JSONObject()
+    val manga = optional("Reading statistics", "statistics { manga { $common chaptersRead volumesRead genres(limit:8,sort:COUNT_DESC) { genre count } } }")
+        .optJSONObject("statistics")?.optJSONObject("manga") ?: JSONObject()
+    val favorites = optional("Favorites", "favourites { anime(perPage:20) { nodes { ${AniListApi.CARD_FIELDS} isAdult } } characters(perPage:20) { nodes { id name { full } image { large } } } staff(perPage:20) { nodes { id name { full } image { large } } } }")
+        .optJSONObject("favourites")
+    return UserProfile(base.getInt("id"), base.text("name"),base.optJSONObject("avatar")?.text("large").orEmpty(),base.text("bannerImage"),base.text("about"), anime,manga,
+        favorites?.optJSONObject("anime")?.optJSONArray("nodes")?.objects()?.filterNot { it.optBoolean("isAdult") }?.map(AniListApi::parseMedia).orEmpty(),
+        parseCredits(favorites?.optJSONObject("characters")?.optJSONArray("nodes")),
+        parseCredits(favorites?.optJSONObject("staff")?.optJSONArray("nodes")), warnings)
 }
 suspend fun AniListApi.remoteList(user: Int, token: String? = null): List<RemoteEntry> {
     val all = mutableListOf<RemoteEntry>()

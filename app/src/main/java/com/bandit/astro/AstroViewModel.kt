@@ -84,7 +84,6 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
     }
     init {
         loadDiscovery()
-        viewModelScope.launch { try { spotlight.value = app.api.discover(Catalog.ANIME,"",1).media } catch (_: Exception) {} }
         viewModelScope.launch { combine(account, app.preferences.flow) { session,p -> (session?.id ?: 0) to p.autoSync }.distinctUntilChanged().collect { (_, enabled) -> AutoSync.schedule(app,enabled) } }
         viewModelScope.launch { account.map { it?.id }.distinctUntilChanged().collect { profile.value=null; profileError.value=""; comparison.value=null; recommendationJob?.cancel(); suggestions.value="" to emptyList(); suggestionSource.value=null; suggestionError.value=""; suggestionLoading.value=false; radarJob?.cancel();todayAirings.value=emptyList();radarError.value=""; closeDetail(); refreshProfile() } }
         viewModelScope.launch {
@@ -108,6 +107,7 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
         try {
             val page = if (more) old.page + 1 else 1
             val result = if(old.filters.studioId>0) app.api.studio(old.filters.studioId,page,old.search,old.filters) else app.api.discover(old.catalog, old.search, page, old.filters)
+            if(old.catalog==Catalog.ANIME && old.search.isBlank() && old.filters==ExploreFilters() && page==1) spotlight.value=result.media
             val items = ((if (more) old.items else emptyList()) + result.media).distinctBy { it.id }
             _discovery.value = old.copy(items = items, page = page, hasMore = result.hasNext, loading = false)
         } catch (e: CancellationException) { throw e }
@@ -190,7 +190,8 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
     fun remove(id:Int)=editEntry(id) { it.copy(deleted=true) }
     fun status(id:Int,value:String)=editEntry(id,"chapter") { it.copy(status=value,progress=if(value=="COMPLETED" && it.total>0) it.total else it.progress) }
     fun notes(id:Int,value:String) { val db=app.database; task { db.withTransaction { db.dao().entry(id)?.let { db.dao().put(it.copy(notes=value.take(10000))) } } } }
-    fun theme(value:String)=task { app.preferences.theme(value);if(value=="Liquid Glass")app.preferences.flag("glass",true);if(value=="Dynamic")app.preferences.flag("dynamic",true) }
+    fun theme(value:String)=task { app.preferences.theme(value);if(value=="Liquid Glass"){app.preferences.flag("glass",true);app.preferences.flag("blur",true);app.preferences.flag("amoled",false)};if(value=="Dynamic")app.preferences.flag("dynamic",true) }
+    fun appearanceText(name:String,value:String)=task {app.preferences.text(name,value)}
     fun flag(name:String,value:Boolean)=task { app.preferences.flag(name,value) }
     fun number(name:String,value:Float)=task { app.preferences.number(name,value) }
     fun filter(value:ExploreFilters) { discoverJob?.cancel(); _discovery.value=Discovery(catalog=_discovery.value.catalog,search=_discovery.value.search,filters=value);loadDiscovery() }
@@ -226,15 +227,16 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
         personJob?.cancel();personJob=viewModelScope.launch { try { val n=app.api.person(s.id,s.staff,p.page+1,personLanguage.value);_person.value=s.copy(value=n.copy(works=(p.works+n.works).distinctBy { it.id },actors=(p.actors+n.actors).distinctBy {it.id},roles=(p.roles+n.roles).distinctBy {it.id})) }
         catch(e:CancellationException){throw e} catch(e:Exception){announce(e.message ?: "Could not load works.")} }
     }
-    fun loadSongs() { val id=_detail.value.value?.media?.malId ?: 0; if(id<=0||songsLoading.value)return
-        songsLoading.value=true;songsError.value="";songsJob=viewModelScope.launch { try {
-            val data=withContext(Dispatchers.IO) { app.http.newCall(okhttp3.Request.Builder().url("https://api.jikan.moe/v4/anime/$id/themes").build()).execute().use {
-                if(!it.isSuccessful) throw ApiException(if(it.code==429) "Song credits are busy. Retry in a minute." else "Could not load song credits.")
-                JSONObject(it.body?.string() ?: "{}").getJSONObject("data")
-            } }
-            fun rows(key:String)=data.getJSONArray(key).let { a -> (0 until a.length()).map { parseSongCredit(a.getString(it)) } }
-            songs.value=rows("openings") to rows("endings")
-        } catch(e:CancellationException){throw e} catch(e:Exception){songsError.value=e.message ?: "Could not load songs."} finally {songsLoading.value=false} }
+    fun loadSongs() {
+        val media=_detail.value.value?.media ?: return
+        if(media.malId<=0||songsLoading.value)return
+        songsLoading.value=true;songsError.value=""
+        songsJob=viewModelScope.launch {
+            try {val result=app.music.songs(media.malId);if(_detail.value.id==media.id)songs.value=result}
+            catch(e:CancellationException){throw e}
+            catch(e:Exception){if(_detail.value.id==media.id)songsError.value=e.message ?: "Could not load song credits."}
+            finally {if(_detail.value.id==media.id)songsLoading.value=false}
+        }
     }
     fun recommend(id:Int=0) {
         val entry=collection.filter { it.status=="COMPLETED" || it.score>=70 }.let { rows->rows.firstOrNull {it.mediaId==id} ?: rows.maxByOrNull {it.score} } ?: return

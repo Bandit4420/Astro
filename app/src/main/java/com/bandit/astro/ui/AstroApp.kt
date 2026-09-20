@@ -22,6 +22,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import dev.chrisbanes.haze.*
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -73,16 +74,23 @@ fun AstroApp(model: AstroViewModel, notificationId: Int, consumed: () -> Unit) {
     }
     LaunchedEffect(notificationId) { if (notificationId > 0) { model.open(notificationId); consumed() } }
     val accent = if (detail.id > 0) detail.value?.media?.accent.orEmpty() else ""
-    AstroTheme(preferences, accent) {
+    val effective=powerAwarePreferences(preferences)
+    AstroTheme(effective, accent) {
+        val haze=remember {HazeState()}
+        val glass=effective.glass && !effective.amoled && effective.theme!="AMOLED"
+        val background=MaterialTheme.colorScheme.background
+        val glassStyle=HazeStyle(backgroundColor=background,tint=HazeTint(background.copy(alpha=effective.transparency)),blurRadius=effective.blurAmount.dp,noiseFactor=0f)
+        val chrome=if(glass)Modifier.hazeEffect(haze,glassStyle) {blurEnabled=effective.blur && HazeDefaults.blurEnabled()} else Modifier
+        val navAccent=parseAccent(effective.navigationAccent,MaterialTheme.colorScheme.primary)
         BackHandler(enabled = person != null || detail.id > 0 || tab != 0 || extra.isNotBlank()) {
             when { person != null -> model.closePerson(); detail.id > 0 -> model.closeDetail(); extra.isNotBlank() -> extra=""; else -> tab = 0 }
         }
         Box(Modifier.fillMaxSize()) {
-        AmbientBackdrop(preferences,detail.value?.media?.banner.orEmpty())
+        AmbientBackdrop(effective,detail.value?.media?.banner.orEmpty(),if(glass)Modifier.hazeSource(haze) else Modifier)
         Scaffold(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground,
             snackbarHost = { SnackbarHost(snackbar) { RichChibiNotice(it) } },
             topBar = {
-                TopAppBar(title = {
+                TopAppBar(modifier=chrome,colors=TopAppBarDefaults.topAppBarColors(containerColor=if(glass)Color.Transparent else background), title = {
                     Column {
                         Text(if (person != null) "People & stories" else if (detail.id > 0) "In your universe" else "astro.",
                             fontWeight = FontWeight.ExtraBold, fontSize = if (detail.id > 0) 20.sp else 30.sp)
@@ -104,15 +112,20 @@ fun AstroApp(model: AstroViewModel, notificationId: Int, consumed: () -> Unit) {
                 })
             },
             bottomBar = {
-                if (detail.id == 0 && person == null) NavigationBar {
+                if (detail.id == 0 && person == null) Box(Modifier.navigationBarsPadding().padding(horizontal=12.dp,vertical=8.dp)) {
+                NavigationBar(modifier=Modifier.clip(RoundedCornerShape(26.dp)).then(chrome).border(1.dp,MaterialTheme.colorScheme.outline.copy(alpha=.25f),RoundedCornerShape(26.dp)),
+                    containerColor=if(glass)Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
+                    windowInsets=WindowInsets(0,0,0,0),tonalElevation=0.dp) {
                     destinations.forEachIndexed { index, item ->
                         NavigationBarItem(selected = tab == index, onClick = { extra=""; tab = index },
-                            icon = { Icon(item.icon, item.name) }, label = { Text(item.name, fontSize = 10.sp) })
+                            icon = { Icon(item.icon, item.name) }, label = { Text(item.name, style=MaterialTheme.typography.labelSmall,maxLines=1) },
+                            colors=NavigationBarItemDefaults.colors(selectedIconColor=navAccent,selectedTextColor=navAccent,indicatorColor=navAccent.copy(alpha=.13f)))
                     }
-                }
+                } }
             }
         ) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding)) {
+            val route="${person?.id ?: 0}:${detail.id}:$extra:$tab"
+            Box(Modifier.fillMaxSize().then(if(glass)Modifier.hazeSource(haze,zIndex=1f) else Modifier).padding(padding).pageEntrance(route,effective.animations)) {
                 when {
                     person != null -> PersonScreen(person!!, detail.value?.characters.orEmpty(), preferences.spoilers, model)
                     detail.id > 0 -> DetailScreen(detail, library.firstOrNull { it.mediaId == detail.id }, preferences.spoilers, model)
@@ -286,7 +299,7 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
             }
             Text("${if (media.score > 0) "★ ${media.score}%  ·  " else ""}${if (media.total > 0) media.total else "?"} ${media.unit}s  ·  ${media.status.pretty()}",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-            if (entry == null) Button(onClick = { model.add(media) }, modifier = Modifier.fillMaxWidth()) {
+            if (entry == null) AstroButton(onClick = { model.add(media) }, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Rounded.Add, null); Spacer(Modifier.width(8.dp)); Text("Add to my collection")
             } else {
                 EntryRow(entry, model)
@@ -298,7 +311,7 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
             }
             InlineTrailer(media)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (media.trailerSite == "youtube" && media.trailerId.isNotBlank()) OutlinedButton(onClick = {
+                if (media.trailerSite == "youtube" && media.trailerId.isNotBlank()) AstroOutlinedButton(onClick = {
                     openLink(context, "https://www.youtube.com/watch?v=${Uri.encode(media.trailerId)}")
                 }) { Icon(Icons.Rounded.PlayArrow, null); Text("Trailer") }
                 TextButton(onClick = { openLink(context, "https://anilist.co/${if (media.type == "ANIME") "anime" else "manga"}/${media.id}") }) { Text("AniList ↗") }
@@ -319,7 +332,10 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
                         Text(character.name, fontWeight = FontWeight.Bold, maxLines = 2, modifier = Modifier.clickable { model.openPerson(character.id, false) })
                         Text(character.role.pretty(), fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
                         character.actors.ifEmpty {if(character.actorId>0)listOf(Credit(character.actorId,character.actorName,character.actorImage,"")) else emptyList()}.forEach {actor->
-                            TextButton(onClick={model.openPerson(actor.id,true)},contentPadding=PaddingValues(0.dp)){Text(actor.name,fontSize=12.sp,maxLines=2)}
+                            Row(Modifier.fillMaxWidth().clickable {model.openPerson(actor.id,true)}.padding(vertical=4.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(7.dp)) {
+                                Cover(actor.image,actor.name,Modifier.size(32.dp))
+                                Text(actor.name,style=MaterialTheme.typography.labelMedium,maxLines=2,modifier=Modifier.weight(1f))
+                            }
                         }
                     }
                 }
@@ -356,8 +372,11 @@ internal fun PersonScreen(state: PersonState, cast: List<CastMember>, spoilers: 
         if (person == null) item { if (state.error != null) ErrorNotice(state.error) { model.openPerson(state.id, state.staff) } else Loading() }
         else {
             item { Cover(person.image, person.name, Modifier.width(200.dp).height(260.dp)) }
-            item { Text(person.name, fontSize = 30.sp, fontWeight = FontWeight.Bold);if(person.nativeName.isNotBlank())Text(person.nativeName) }
-            if(!spoilers||revealed)item {person.facts.forEach {(label,value)->Text("$label · $value",fontSize=13.sp)}}
+            item { Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                Text(person.name, style=MaterialTheme.typography.headlineLarge)
+                if(person.nativeName.isNotBlank())Text(person.nativeName,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            } }
+            if(!spoilers||revealed)item { PersonFacts(person.facts) }
             item {
                 if (spoilers && !revealed) Notice("Biography hidden", "Biographies may mention events beyond your progress.", "Reveal biography", { revealed = true })
                 else RichAbout(person.description,revealSpoilers=true)
@@ -433,16 +452,7 @@ internal fun SettingsScreen(preferences: Preferences, model: AstroViewModel, too
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item { SectionTitle("Make yourself at home", "Small details. Your kind of universe.") }
         item { OrbitToolsRow(tool) }
-        item { Column {
-            Eyebrow("APPEARANCE")
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(themeNames) { theme ->
-                    FilterChip(selected = preferences.theme == theme, onClick = { model.theme(theme) }, label = { Text(theme) })
-                }
-            }
-            ToggleRow("Artwork accents", "Let title artwork colour the whole screen.", preferences.dynamic) { model.flag("dynamic", it) }
-            AppearanceOptions(preferences,model)
-        } }
+        item { AppearanceStudio(preferences,model) }
         item { Column {
             Eyebrow("YOUR EXPERIENCE")
             ToggleRow("Spoiler protection", "Hide descriptions, biographies and cast until you reveal them.", preferences.spoilers) { model.flag("spoilers", it) }
@@ -467,7 +477,7 @@ internal fun SettingsScreen(preferences: Preferences, model: AstroViewModel, too
             Text("Native Compose screens · Android 12+", fontWeight = FontWeight.SemiBold)
             Text("Artwork cache: up to 64 MB on disk. Background requests run only when reminders or auto-sync are enabled. No analytics or advertising SDKs.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            Text("Astro 0.2.0 · Parity preview", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
+            Text("Astro ${context.packageManager.getPackageInfo(context.packageName,0).versionName}", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
         } }
     }
 }
@@ -500,7 +510,9 @@ internal fun Cover(url: String, description: String, modifier: Modifier, rounded
     val shape = RoundedCornerShape(if (rounded) LocalAppearance.current.radius.dp else 0.dp)
     Box(modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
         Icon(Icons.Rounded.Star, null, tint = MaterialTheme.colorScheme.primary.copy(alpha = .3f))
-        AsyncImage(model = coil.request.ImageRequest.Builder(LocalContext.current).data(url.ifBlank { null }).crossfade(LocalAppearance.current.animations).build(), contentDescription = description.ifBlank { null }, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+        val context=LocalContext.current;val animate=LocalAppearance.current.animations
+        val request=remember(url,context,animate) {coil.request.ImageRequest.Builder(context).data(url.ifBlank {null}).crossfade(if(animate) 180 else 0).build()}
+        AsyncImage(model = request, contentDescription = description.ifBlank { null }, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
     }
 }
 @Composable
@@ -508,7 +520,7 @@ internal fun Eyebrow(text: String) { Text(text, fontSize = 10.sp, letterSpacing 
 @Composable
 internal fun SectionTitle(title: String, subtitle: String = "") {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+        Text(title, style=MaterialTheme.typography.titleLarge)
         if (subtitle.isNotBlank()) Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -544,6 +556,8 @@ internal fun Loading() { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlig
 internal fun String.pretty() = lowercase().replace('_', ' ').replaceFirstChar { it.titlecase() }
 internal fun plainText(value: String) = HtmlCompat.fromHtml(value.replace("<br>", "\n"), HtmlCompat.FROM_HTML_MODE_LEGACY).toString().trim()
 internal fun openLink(context: android.content.Context, url: String) {
-    try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    val uri=Uri.parse(url)
+    if(uri.scheme !in listOf("https","http") || uri.host.isNullOrBlank())return
+    try { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
     catch (_: android.content.ActivityNotFoundException) { android.widget.Toast.makeText(context, "No app is available to open this link.", android.widget.Toast.LENGTH_SHORT).show() }
 }

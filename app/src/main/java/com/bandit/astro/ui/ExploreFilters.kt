@@ -34,6 +34,6 @@ import com.bandit.astro.data.*
     }},confirmButton={TextButton(onClick={m.filter(draft);open=false}) {Text("Apply")}},dismissButton={TextButton(onClick={open=false}) {Text("Cancel")}})
 }
 @Composable internal fun Choice(label:String,value:String,options:List<String>,changed:(String)->Unit) {var open by remember{mutableStateOf(false)};Box {
-    OutlinedButton(onClick={open=true},modifier=Modifier.fillMaxWidth()) {Text("$label: ${value.ifBlank {"Any"}.pretty()}")}
+    AstroOutlinedButton(onClick={open=true},modifier=Modifier.fillMaxWidth()) {Text("$label: ${value.ifBlank {"Any"}.pretty()}")}
     DropdownMenu(expanded=open,onDismissRequest={open=false}) {(listOf("")+options).forEach {v->DropdownMenuItem(text={Text(v.ifBlank {"Any"}.pretty())},onClick={changed(v);open=false})}}
 }}

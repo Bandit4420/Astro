@@ -35,6 +35,18 @@ class NativeSmokeTest {
         compose.onNodeWithText("A whole world awaits").assertExists();screenshot("03-explore")
         compose.onNodeWithText("Settings").performClick()
         compose.onNodeWithText("Make yourself at home").assertExists();screenshot("04-settings")
+        val app=compose.activity.application as AstroApplication
+        kotlinx.coroutines.runBlocking {
+            app.preferences.theme("Liquid Glass");app.preferences.flag("glass",true);app.preferences.flag("blur",true)
+            app.preferences.text("buttonAccent","#FFB5D0");app.preferences.text("navigationAccent","#C8B5FF")
+        }
+        compose.waitForIdle();screenshot("06-liquid-glass")
+        kotlinx.coroutines.runBlocking {app.preferences.flag("amoled",true)}
+        compose.waitForIdle();screenshot("07-amoled")
+        kotlinx.coroutines.runBlocking {
+            app.preferences.theme("Astro");app.preferences.flag("amoled",false);app.preferences.flag("glass",false);app.preferences.flag("blur",false)
+            app.preferences.text("buttonAccent","");app.preferences.text("navigationAccent","")
+        }
         compose.onNodeWithContentDescription("Profile & sign in").performClick()
         compose.onNodeWithText("AniList account").assertExists()
         compose.onNodeWithText("Sign in with AniList").assertIsEnabled()

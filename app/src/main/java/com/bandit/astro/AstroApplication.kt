@@ -25,6 +25,7 @@ class AstroApplication : Application(), ImageLoaderFactory {
         OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS)
             .callTimeout(30, TimeUnit.SECONDS).build()
     }
+    val music by lazy { MusicApi(http) }
     val api by lazy { AniListApi(http) }
     override fun onCreate() { super.onCreate(); AiringNotifications.createChannel(this) }
     override fun newImageLoader() = ImageLoader.Builder(this)

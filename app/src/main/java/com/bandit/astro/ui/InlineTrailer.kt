@@ -24,7 +24,7 @@ import com.bandit.astro.data.Media
     var playing by rememberSaveable(media.id){mutableStateOf(false)}
     val context=LocalContext.current;val lifecycle=LocalLifecycleOwner.current.lifecycle
     Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
-        if(!playing)OutlinedButton(onClick={playing=true}){Text("Play trailer here")}
+        if(!playing)AstroOutlinedButton(onClick={playing=true}){Text("Play trailer here")}
         else {
             val view=remember(media.id){WebView(context).apply {
                 settings.javaScriptEnabled=true;settings.domStorageEnabled=true

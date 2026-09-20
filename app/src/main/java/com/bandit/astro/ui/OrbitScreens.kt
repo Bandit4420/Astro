@@ -38,14 +38,19 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
         if(user!=null) {
             if(user.banner.isNotBlank())item{Cover(user.banner,"Profile banner",Modifier.fillMaxWidth().height(140.dp))}
             item{SectionTitle(user.name,"AniList profile #${user.id}")}
-            item {Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Stat("${user.anime.optInt("minutesWatched")/60}h","watched",Modifier.weight(1f));Stat("${user.anime.optInt("episodesWatched")}","episodes",Modifier.weight(1f));Stat("${user.anime.optDouble("meanScore",0.0)}","mean score",Modifier.weight(1f))}}
-            item {Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Stat("${user.manga.optInt("chaptersRead")}","chapters",Modifier.weight(1f));Stat("${user.manga.optInt("volumesRead")}","volumes",Modifier.weight(1f))}}
-            item {SectionTitle("Manga genres");RankChart(user.manga.optJSONArray("genres")?.objects()?.map {it.text("genre") to it.optInt("count")}.orEmpty())}
-            item {ProfileCharts(user)}
-            item {SectionTitle("Favorite anime");LazyRow(horizontalArrangement=Arrangement.spacedBy(12.dp)){items(user.favorites,key={it.id}){media->MediaCard(media,Modifier.width(145.dp)){m.open(media.id)}}};if(user.favorites.isEmpty())Text("No favorite anime listed.")}
+            if(user.anime.length()>0) {
+                item {Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Stat("${user.anime.optInt("minutesWatched")/60}h","watched",Modifier.weight(1f));Stat("${user.anime.optInt("episodesWatched")}","episodes",Modifier.weight(1f));Stat("${user.anime.optDouble("meanScore",0.0)}","mean score",Modifier.weight(1f))}}
+                item {ProfileCharts(user)}
+            }
+            if(user.manga.length()>0) {
+                item {Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Stat("${user.manga.optInt("chaptersRead")}","chapters",Modifier.weight(1f));Stat("${user.manga.optInt("volumesRead")}","volumes",Modifier.weight(1f))}}
+                item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {SectionTitle("Manga genres");RankChart(user.manga.optJSONArray("genres")?.objects()?.map {it.text("genre") to it.optInt("count")}.orEmpty())}}
+            }
+            if(user.warnings.isNotEmpty())item {Notice("Some profile sections couldn't load",user.warnings.joinToString("\n"),"Retry profile",{m.refreshProfile()})}
+            item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){SectionTitle("Favorite anime");LazyRow(horizontalArrangement=Arrangement.spacedBy(12.dp)){items(user.favorites,key={it.id}){media->MediaCard(media,Modifier.width(145.dp)){m.open(media.id)}}};if(user.favorites.isEmpty()&&user.warnings.none {it.startsWith("Favorites")})Text("No favorite anime listed.")}}
             item {PeopleStrip("Favorite characters",user.characters){m.openPerson(it,false)}}
             item {PeopleStrip("Favorite staff & voices",user.staff){m.openPerson(it,true)}}
-            item {SectionTitle("About");RichAbout(user.about)}
+            item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){SectionTitle("About");RichAbout(user.about)}}
         }
         if(error.isNotBlank())item {ErrorNotice(error){m.refreshProfile()}}
         if(account!=null)item {TextButton(onClick={m.refreshProfile()}) {Text("Refresh profile")}}
@@ -90,17 +95,17 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
             item {Row {Catalog.entries.forEach {c->FilterChip(selected=catalog==c,onClick={catalog=c},label={Text(c.label)})}}}
             item {Choice("Mode",mode,listOf("Cover","Clues","Trivia")){mode=it.ifBlank {"Cover"}};Choice("Difficulty",difficulty,listOf("Easy","Medium","Hard","Hashira")){difficulty=it.ifBlank {"Easy"}}}
             item {Text("$wins quiz wins · $streak day streak");if(wins>=1)Text("🏆 First orbit mastered");if(wins>=10)Text("🌌 Ten quiz victories");if(wins>=100)Text("⚔ 100 trivia wins");if(records.mastered()>=10)Text("🌌 10 universes mastered")}
-            item {Button(onClick={rounds=quizRounds(pool,mode,difficulty in listOf("Hard","Hashira"));index=0;answer="";score=0},enabled=pool.size>=4 && !loading){Text(if(pool.size<4 || loading) "Waiting for AniList titles…" else "Start 10 rounds")}}
+            item {AstroButton(onClick={rounds=quizRounds(pool,mode,difficulty in listOf("Hard","Hashira"));index=0;answer="";score=0},enabled=pool.size>=4 && !loading){Text(if(pool.size<4 || loading) "Waiting for AniList titles…" else "Start 10 rounds")}}
         } else if(done) {
-            item {SectionTitle("${score} / ${rounds.size}","Your knowledge this round: ${score*100/rounds.size}%");Button(onClick={rounds=emptyList();index=0}) {Text("Play again")}}
+            item {SectionTitle("${score} / ${rounds.size}","Your knowledge this round: ${score*100/rounds.size}%");AstroButton(onClick={rounds=emptyList();index=0}) {Text("Play again")}}
         } else {
             val round=rounds[index]
             item {Text("Question ${index+1} / ${rounds.size} · $score correct");SectionTitle(round.prompt)}
             if(mode=="Cover")item {Cover(round.media.cover,"Mystery cover",Modifier.width(200.dp).height(280.dp).then(if(answer.isBlank() && difficulty!="Easy") Modifier.blur(if(difficulty=="Hashira") 20.dp else if(difficulty=="Hard") 12.dp else 5.dp) else Modifier))}
             if(mode=="Clues")item {round.clues.take(if(difficulty=="Hashira") 2 else if(difficulty=="Hard") 3 else 4).forEach {Text(it)}}
-            items(round.choices){choice->OutlinedButton(onClick={if(answer.isBlank()){answer=choice;if(choice==round.answer)score++}},enabled=answer.isBlank(),modifier=Modifier.fillMaxWidth()){Text(choice)}}
+            items(round.choices){choice->AstroOutlinedButton(onClick={if(answer.isBlank()){answer=choice;if(choice==round.answer)score++}},enabled=answer.isBlank(),modifier=Modifier.fillMaxWidth()){Text(choice)}}
             if(answer.isNotBlank())item {Text(if(answer==round.answer) "Correct! ✨" else "Answer: ${round.answer}",color=MaterialTheme.colorScheme.primary)
-                Button(onClick={index++;answer="";if(index>=rounds.size){
+                AstroButton(onClick={index++;answer="";if(index>=rounds.size){
                     records.add(score,rounds.size,mode,difficulty,rounds.map {it.media.id});wins=records.wins();streak=records.streak()
                 }}) {Text(if(index==rounds.lastIndex) "See results" else "Next question")}}
         }
@@ -112,7 +117,7 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
         item {SectionTitle("Let your orbit choose","Pick a title from Plan to watch / read")}
         item {Choice("Mood / genre",genre,genres){genre=it};Choice("Minutes for one episode",time,listOf("15","25","45","90","180")){time=it}}
-        item {Button(onClick={pick=entries.filter {it.status=="PLANNING" && (genre.isBlank()||genre in it.genres.split("|")) && (time.isBlank()||it.type=="ANIME" && it.duration>0 && it.duration<=(time.toIntOrNull() ?: 0))}.randomOrNull();if(pick==null)m.announce("No planned titles match those filters.")}) {Text("Spin my orbit")}}
+        item {AstroButton(onClick={pick=entries.filter {it.status=="PLANNING" && (genre.isBlank()||genre in it.genres.split("|")) && (time.isBlank()||it.type=="ANIME" && it.duration>0 && it.duration<=(time.toIntOrNull() ?: 0))}.randomOrNull();if(pick==null)m.announce("No planned titles match those filters.")}) {Text("Spin my orbit")}}
         pick?.let {e->item {MediaCard(e.asMedia(),Modifier.width(220.dp)){m.open(e.mediaId)}}}
     }
 }
@@ -120,7 +125,7 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
     var name by rememberSaveable{mutableStateOf("")};val result by m.comparison.collectAsStateWithLifecycle();val error by m.comparisonError.collectAsStateWithLifecycle()
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(18.dp)) {
         item {SectionTitle("Two orbits, shared stories","Compare a public AniList profile. This does not sign in as them.")}
-        item {OutlinedTextField(name,{name=it.take(100)},label={Text("AniList username")},singleLine=true);Button(onClick={m.compare(name)},enabled=name.isNotBlank()){Text("Compare tastes")}}
+        item {OutlinedTextField(name,{name=it.take(100)},label={Text("AniList username")},singleLine=true);AstroButton(onClick={m.compare(name)},enabled=name.isNotBlank()){Text("Compare tastes")}}
         if(error.isNotBlank())item {Text(error,color=MaterialTheme.colorScheme.error)}
         result?.let {(user,list)->val (percent,shared)=compatibility(entries,list)
             item {Cover(user.avatar,user.name,Modifier.size(72.dp));SectionTitle(user.name,"${shared.size} shared stories · ${percent?.let {"$it% rating agreement"} ?: "No shared ratings yet"}");Text("Agreement = 100 − average rating difference, using shared rated titles on a 100-point scale.",fontSize=12.sp)}
@@ -143,7 +148,7 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
             if(active!=null){val from=points[stars.indexOf(active)];stars.forEachIndexed {i,e->if(e.mediaId!=selected&&e.genres.split("|").any {it.isNotBlank()&&it in active.genres.split("|")})drawLine(accent.copy(alpha=.25f),Offset(from.x*size.width,from.y*size.height),Offset(points[i].x*size.width,points[i].y*size.height),2f)}}
             stars.forEachIndexed {i,e->val color=Color.hsv(((genres.indexOf(e.genres.substringBefore("|")).coerceAtLeast(0)*47)%360).toFloat(),.35f,1f);drawCircle(color,if(e.mediaId==selected) 12.dp.toPx() else (3+e.score/20).dp.toPx(),Offset(points[i].x*size.width,points[i].y*size.height))}
         }}}}
-        stars.firstOrNull {it.mediaId==selected}?.let {e->item{SectionTitle(e.title,e.genres.replace("|"," • "));Button(onClick={m.open(e.mediaId)}){Text("Open story")};Text("Nearby stories",fontWeight=FontWeight.Bold);stars.filter {other->other.mediaId!=e.mediaId&&other.genres.split("|").any {it.isNotBlank()&&it in e.genres.split("|")}}.sortedByDescending {genreOverlap(e.asMedia(),it.asMedia())}.take(8).forEach {other->TextButton(onClick={selected=other.mediaId}){Text(other.title)}}}}
+        stars.firstOrNull {it.mediaId==selected}?.let {e->item{SectionTitle(e.title,e.genres.replace("|"," • "));AstroButton(onClick={m.open(e.mediaId)}){Text("Open story")};Text("Nearby stories",fontWeight=FontWeight.Bold);stars.filter {other->other.mediaId!=e.mediaId&&other.genres.split("|").any {it.isNotBlank()&&it in e.genres.split("|")}}.sortedByDescending {genreOverlap(e.asMedia(),it.asMedia())}.take(8).forEach {other->TextButton(onClick={selected=other.mediaId}){Text(other.title)}}}}
         item {Text("Accessible title list",fontWeight=FontWeight.Bold)}
         items(stars,key={it.mediaId}) {e->TextButton(onClick={selected=e.mediaId}) {Text("${e.title} · ${e.score.takeIf {it>0} ?: "Unrated"}")}}
         if(stars.isEmpty())item {Notice(if(entries.isEmpty()) "Your galaxy is waiting" else "No matching stars",if(entries.isEmpty()) "Add stories to your collection to see their connections." else "Try a different title.")}

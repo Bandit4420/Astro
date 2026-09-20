@@ -87,12 +87,15 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
             parseCredits(data.optJSONObject("characters")?.optJSONArray("nodes")),data.optJSONObject("characters")?.optJSONObject("pageInfo")?.optBoolean("hasNextPage") ?: false)
     }
     suspend fun schedule(from: Long, to: Long, page: Int = 1, ids: List<Int>? = null): Pair<List<Airing>, Boolean> {
+        if (ids != null && ids.isEmpty()) return emptyList<Airing>() to false
         val vars = JSONObject().put("from", from).put("to", to).put("page", page)
-            .put("ids", ids?.let { JSONArray(it) } ?: JSONObject.NULL)
-        val data = query("""query(${'$'}from:Int, ${'$'}to:Int, ${'$'}page:Int, ${'$'}ids:[Int]) {
+        if (ids != null) vars.put("ids", JSONArray(ids))
+        val idDefinition = if (ids != null) ", ${'$'}ids:[Int]" else ""
+        val idFilter = if (ids != null) ", mediaId_in:${'$'}ids" else ""
+        val data = query("""query(${'$'}from:Int, ${'$'}to:Int, ${'$'}page:Int$idDefinition) {
             Page(page:${'$'}page, perPage:50) { pageInfo { hasNextPage }
-                airingSchedules(airingAt_greater:${'$'}from, airingAt_lesser:${'$'}to, mediaId_in:${'$'}ids, sort:TIME) {
-                    id episode airingAt media { $MEDIA_FIELDS isAdult }
+                airingSchedules(airingAt_greater:${'$'}from, airingAt_lesser:${'$'}to, sort:TIME$idFilter) {
+                    id episode airingAt media { $CARD_FIELDS isAdult }
                 }
             }
         }""", vars).getJSONObject("Page")
@@ -102,6 +105,9 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
         } to data.getJSONObject("pageInfo").optBoolean("hasNextPage")
     }
     companion object {
+        // Small, scalar-only selection for schedules and favorites: no nested studio/trailer resolvers.
+        internal const val CARD_FIELDS = """id title { userPreferred native } coverImage { large color }
+            type format status episodes chapters duration averageScore startDate { year } genres"""
         internal const val MEDIA_FIELDS = """id idMal volumes studios(isMain:true) { nodes { name } } title { userPreferred native } coverImage { large color } bannerImage type format status
             description(asHtml:false) episodes chapters duration averageScore seasonYear startDate { year } genres
             nextAiringEpisode { episode airingAt } trailer { id site }"""

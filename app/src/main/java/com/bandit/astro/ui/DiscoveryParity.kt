@@ -41,7 +41,7 @@ import java.time.format.DateTimeFormatter
                 Text(media.title,color=Color.White,fontSize=26.sp,fontWeight=FontWeight.Bold)
                 Text(media.genres.take(3).joinToString(" • "),color=Color.White.copy(alpha=.85f),fontSize=12.sp)
                 Text(if(p.spoilers) "Open this story when you're ready. Plot previews are hidden." else plainText(media.description),maxLines=3,color=Color.White,lineHeight=21.sp)
-                Button(onClick={m.open(media.id)}){Text("Explore story")}
+                AstroButton(onClick={m.open(media.id)}){Text("Explore story")}
                 val saved=library.any {it.mediaId==media.id}
                 TextButton(onClick={m.add(media)},enabled=!saved){Text(if(saved) "✓ In your collection" else "+ Add to collection",color=Color.White)}
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween){
