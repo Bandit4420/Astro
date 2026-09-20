@@ -55,12 +55,12 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
         return CatalogPage(data.getJSONArray("media").objects().map(::parseMedia), data.getJSONObject("pageInfo").optBoolean("hasNextPage"))
     }
     suspend fun detail(id: Int): MediaDetail {
-        val data = query("""query(${'$'}id:Int) { Media(id:${'$'}id) { $MEDIA_FIELDS
+        val data = query("""query(${'$'}id:Int) { Media(id:${'$'}id) { $MEDIA_FIELDS tags { name isMediaSpoiler isGeneralSpoiler }
             characters(sort:[ROLE,RELEVANCE,ID], perPage:25) { pageInfo { hasNextPage } edges { role node { id name { full } image { large } }
                 voiceActors(language:JAPANESE, sort:RELEVANCE) { id name { full } image { large } } } }
             staff(perPage:25) { edges { role node { id name { full } image { large } } } }
             relations { edges { relationType node { $MEDIA_FIELDS isAdult } } }
-            recommendations(perPage:12, sort:RATING_DESC) { nodes { mediaRecommendation { $MEDIA_FIELDS isAdult } } }
+            recommendations(perPage:12, sort:RATING_DESC) { nodes { mediaRecommendation { $MEDIA_FIELDS tags { name isMediaSpoiler isGeneralSpoiler } isAdult } } }
         } }""", JSONObject().put("id", id)).getJSONObject("Media")
         val characters = data.optJSONObject("characters")?.optJSONArray("edges")?.objects()?.map { edge ->
             val node = edge.getJSONObject("node")
@@ -111,7 +111,7 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
     }
     companion object {
         internal const val MEDIA_FIELDS = """id idMal volumes studios(isMain:true) { nodes { name } } title { userPreferred native } coverImage { large color } bannerImage type format status
-            tags { name isMediaSpoiler isGeneralSpoiler } description(asHtml:false) episodes chapters duration averageScore seasonYear startDate { year } genres
+            description(asHtml:false) episodes chapters duration averageScore seasonYear startDate { year } genres
             nextAiringEpisode { episode airingAt } trailer { id site }"""
         internal fun parseMedia(value: JSONObject): Media {
             val cover = value.optJSONObject("coverImage")

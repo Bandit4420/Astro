@@ -14,6 +14,11 @@ data class ExploreFilters(val genre: String = "", val tag: String = "", val year
 data class UserProfile(val id: Int, val name: String, val avatar: String, val banner: String, val about: String,
     val anime: JSONObject, val manga: JSONObject, val favorites: List<Media> = emptyList(), val characters: List<Credit> = emptyList(), val staff: List<Credit> = emptyList())
 data class RemoteEntry(val entryId: Int, val entry: LibraryEntry)
+// Keep authentication independent of optional profile charts and favorite connections.
+suspend fun AniListApi.identity(token:String):UserProfile {
+    val d=query("query { Viewer { id name avatar { large } } }",token=token).getJSONObject("Viewer")
+    return UserProfile(d.getInt("id"),d.text("name"),d.optJSONObject("avatar")?.text("large").orEmpty(),"","",JSONObject(),JSONObject())
+}
 suspend fun AniListApi.viewer(token: String): UserProfile = profile(token = token)
 suspend fun AniListApi.profile(name: String? = null, token: String? = null): UserProfile {
     val field = if (name == null) "Viewer" else "User(name:${'$'}name)"

@@ -25,7 +25,7 @@ No signing keys, account tokens, passwords, or AniList client secret belong in G
 - Public browsing is anonymous. Mutations require browser OAuth, verified Viewer ownership and an unexpired encrypted session. See ANILIST_ANDROID.md for client setup.
 - Each account has its own Room database, plus the original guest database. Local edits are transactional, with durable dirty records and revision-based sync acknowledgements. Private notes are excluded from remote mutations.
 - DataStore stores theme, spoiler, timezone, and reminder preferences.
-- Discovery loads 20 titles at a time up to 80, with a 350 ms search debounce and cancellation.
+- Discovery loads 20 titles at a time until the provider is exhausted, with a 350 ms search debounce and cancellation.
 - The detail cache retains 12 titles. Coil's disk cache is capped at 64 MB and its memory cache at 12% of the app's memory budget.
 - An hourly WorkManager request is registered only when the user enables reminders or account auto-sync. It uses a connected-network constraint, retries transient failures with backoff, and checks the preceding six hours of releases for currently watching titles.
 - Alerts are approximate, not exact alarms. No persistent service, exact-alarm permission, foreground polling, analytics or advertising SDK is added.
@@ -36,9 +36,9 @@ No signing keys, account tokens, passwords, or AniList client secret belong in G
 
 AniList has no dependable episode-by-episode spoiler boundaries. Protection conservatively hides descriptions, cast and biographies. Reveals are scoped to the current title/person visit and reset when protection changes.
 
-This is a native parity preview. OP/ED credits, paginated cast, profiles, advanced filters, quiz, constellation, Wrapped, web/native backup conversion, chibi notices and appearance controls are implemented. See [PARITY.md](PARITY.md) for limits. Trailers open in the installed YouTube app or browser.
+This is a native parity preview. OP/ED credits, paginated cast, profiles, advanced filters, quiz, constellation, Wrapped, web/native backup conversion, chibi notices and appearance controls are implemented. See [PARITY.md](PARITY.md) for limits. Trailers offer an opt-in inline player and external YouTube fallback.
 
-AniList's native OAuth client must be registered separately for `astro://oauth/anilist`; the website callback stays unchanged. Guest data is never silently uploaded to a newly signed-in account.
+Default sign-in uses the website handoff with independent browser/app states; optional custom native clients use `astro://oauth/anilist`. Guest data is never silently uploaded to a newly signed-in account.
 
 The `Android device checks` workflow exercises v1→v2 migration, concurrent sync acknowledgements and primary navigation on an Android 12 emulator. Successful CI is separate from live account testing and physical-device battery measurements.
 

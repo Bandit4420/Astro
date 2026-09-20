@@ -27,7 +27,7 @@ class SyncEngine(private val app: AstroApplication) {
         state.value = state.value.copy(running = true, message = "Syncing with AniList…", conflict = 0)
         try {
             current()
-            check(app.api.viewer(session.token).id == session.id) { "AniList account verification failed." }
+            check(app.api.identity(session.token).id == session.id) { "AniList account verification failed." }
             val remote = app.api.remoteList(session.id, session.token).associateBy { it.entry.mediaId }.toMutableMap()
             for (local in dao.allEntries().filter { it.dirty }) {
                 current()

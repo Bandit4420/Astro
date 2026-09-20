@@ -202,10 +202,10 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun finishLogin(uri:Uri) = task {
         val response=app.account.callback(uri)
-        val viewer=app.api.viewer(response.token)
+        val viewer=app.api.identity(response.token)
         app.preferences.flag("autoSync",false)
         app.account.save(Session(viewer.id,viewer.name,viewer.avatar,response.token,response.expiresAt))
-        profile.value=viewer; announce("Welcome, ${viewer.name}. Tap Sync to import your AniList collection.")
+        profile.value=null; announce("Welcome, ${viewer.name}. Tap Sync to import your AniList collection.")
     }
     fun logout() { app.account.logout(); AutoSync.schedule(app,false); app.sync.state.value=SyncState(); announce("Signed out. Your account library remains stored separately.") }
     fun sync(forceId:Int=0,useRemote:Boolean=false)=task { app.sync.run(forceId,useRemote);refreshProfile() }

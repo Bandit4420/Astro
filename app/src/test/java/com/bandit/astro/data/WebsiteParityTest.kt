@@ -22,6 +22,16 @@ class WebsiteParityTest {
         assertEquals(listOf("Found Family"),m.tags)
         assertEquals(0,genreOverlap(m,m))
     }
+    @Test fun `login identity does not depend on profile statistics or favorites`() = runBlocking {
+        val server=MockWebServer();server.start()
+        try {
+            server.enqueue(MockResponse().setBody("""{"data":{"Viewer":{"id":42,"name":"Bandit","avatar":{"large":"avatar.jpg"}}}}"""))
+            val user=AniListApi(OkHttpClient(),server.url("/").toString()).identity("test-token")
+            val request=server.takeRequest();val query=JSONObject(request.body.readUtf8()).getString("query")
+            assertEquals(42,user.id);assertEquals("Bearer test-token",request.getHeader("Authorization"))
+            assertFalse(query.contains("statistics"));assertFalse(query.contains("favourites"))
+        }finally{server.shutdown()}
+    }
     @Test fun `cast query sends requested language and preserves multiple actors`() = runBlocking {
         val server=MockWebServer();server.start()
         try {

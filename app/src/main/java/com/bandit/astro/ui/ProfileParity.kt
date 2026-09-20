@@ -11,6 +11,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
@@ -35,7 +36,7 @@ import com.bandit.astro.data.*
         Text("${user.anime.optJSONArray("statuses")?.objects()?.firstOrNull {it.text("status")=="COMPLETED"}?.optInt("count") ?: 0} anime completed",fontWeight=FontWeight.Bold)
         if(total>0) {
             Box(Modifier.fillMaxWidth().height(190.dp),contentAlignment=Alignment.Center){
-                Canvas(Modifier.size(165.dp)){var start=-90f;statuses.forEachIndexed {i,(_,count)->val sweep=count.toFloat()/total*360;drawArc(colors[i%colors.size],start,sweep,false,size=Size(size.width,size.height),style=Stroke(22.dp.toPx()));start+=sweep}}
+                Canvas(Modifier.size(165.dp)){var start=-90f;statuses.forEachIndexed {i,(_,count)->val sweep=count.toFloat()/total*360;drawArc(colors[i%colors.size],start,sweep,false,topLeft=Offset(11.dp.toPx(),11.dp.toPx()),size=Size(size.width-22.dp.toPx(),size.height-22.dp.toPx()),style=Stroke(22.dp.toPx()));start+=sweep}}
                 Column(horizontalAlignment=Alignment.CenterHorizontally){Text(total.toString(),fontSize=30.sp,fontWeight=FontWeight.Bold);Text("anime",fontSize=12.sp)}
             }
             statuses.forEachIndexed {i,(label,count)->Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text(label,color=colors[i%colors.size]);Text(count.toString())}}
