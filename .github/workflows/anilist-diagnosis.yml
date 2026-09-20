@@ -9,22 +9,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Compare minimal and application queries
+      - name: Isolate query fields and filters
         env:
-          ASTRO_REQUEST: "{\"query\": \"query($genre:String, $tag:String, $year:String, $season:MediaSeason, $status:MediaStatus, $score:Int, $episodes:Int, $sort:[MediaSort], $minEpisodes:Int, $page:Int, $type:MediaType, $search:String, $format:MediaFormat, $excluded:[MediaFormat]) {\\n            Page(page:$page, perPage:20) { pageInfo { hasNextPage }\\n                media(type:$type, search:$search, format:$format, format_not_in:$excluded, isAdult:false, genre:$genre, tag:$tag, startDate_like:$year, season:$season, status:$status, averageScore_greater:$score, episodes_lesser:$episodes, sort:$sort, episodes_greater:$minEpisodes) { id idMal volumes studios(isMain:true) { nodes { name } } title { userPreferred native } coverImage { large color } bannerImage type format status\\n            description(asHtml:false) episodes chapters duration averageScore seasonYear startDate { year } genres\\n            nextAiringEpisode { episode airingAt } trailer { id site } }\\n            }\\n        }\", \"variables\": {\"page\": 1, \"type\": \"ANIME\", \"format\": null, \"excluded\": null, \"sort\": [\"TRENDING_DESC\"]}}"
+          MEDIA_FIELDS: "id idMal volumes studios(isMain:true) { nodes { name } } title { userPreferred native } coverImage { large color } bannerImage type format status\n            description(asHtml:false) episodes chapters duration averageScore seasonYear startDate { year } genres\n            nextAiringEpisode { episode airingAt } trailer { id site }"
         run: |
           python - <<'PY'
           import json,os,urllib.request,urllib.error,time
-          requests=[('minimal',{'query':'query { Page(perPage:1) { media(type:ANIME,isAdult:false) { id title { userPreferred } } } }'}),
-                    ('astro-discover',json.loads(os.environ['ASTRO_REQUEST']))]
-          for name,payload in requests:
-              req=urllib.request.Request('https://graphql.anilist.co',data=json.dumps(payload).encode(),headers={'Content-Type':'application/json','Accept':'application/json','User-Agent':'Astro-Android/1.1 API verification'})
+          probes=[('full-fields','','',{}),
+            ('sort','$sort:[MediaSort]',',sort:$sort',{'sort':['TRENDING_DESC']}),
+            ('format-null','$format:MediaFormat',',format:$format',{'format':None}),
+            ('exclude-null','$excluded:[MediaFormat]',',format_not_in:$excluded',{'excluded':None}),
+            ('search-null','$search:String',',search:$search',{'search':None}),
+            ('filters-null','$genre:String,$tag:String,$year:String,$season:MediaSeason,$status:MediaStatus,$score:Int,$episodes:Int,$minEpisodes:Int',',genre:$genre,tag:$tag,startDate_like:$year,season:$season,status:$status,averageScore_greater:$score,episodes_lesser:$episodes,episodes_greater:$minEpisodes',{})]
+          for name,defs,args,variables in probes:
+              query='query'+('('+defs+')' if defs else '')+' { Page(page:1,perPage:20) { media(type:ANIME,isAdult:false'+args+') { '+os.environ['MEDIA_FIELDS']+' } } }'
+              req=urllib.request.Request('https://graphql.anilist.co',data=json.dumps({'query':query,'variables':variables}).encode(),headers={'Content-Type':'application/json','Accept':'application/json'})
               try:
                   with urllib.request.urlopen(req,timeout=30) as r:
-                      body=r.read().decode(); data=json.loads(body)
-                      print(json.dumps({'name':name,'status':r.status,'errors':data.get('errors'),'count':len(data.get('data',{}).get('Page',{}).get('media',[]))}))
-              except urllib.error.HTTPError as e:
-                  print(json.dumps({'name':name,'status':e.code,'body':e.read().decode()[:2000]}))
-              except Exception as e: print(json.dumps({'name':name,'error':str(e)}))
+                      d=json.load(r);print(json.dumps({'probe':name,'status':r.status,'errors':d.get('errors'),'count':len(d.get('data',{}).get('Page',{}).get('media',[]))}),flush=True)
+              except urllib.error.HTTPError as e: print(json.dumps({'probe':name,'status':e.code,'body':e.read().decode()[:1000]}),flush=True)
+              except Exception as e: print(json.dumps({'probe':name,'error':str(e)}),flush=True)
               time.sleep(3)
           PY
