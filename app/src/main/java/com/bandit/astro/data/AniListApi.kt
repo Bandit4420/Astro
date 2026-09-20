@@ -28,7 +28,7 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
                     response.use {
                         if (!continuation.isActive) return
                         if (!it.isSuccessful) {
-                            val message = if (it.code == 401 || it.code == 403) "AniList authorization expired or was refused. Sign in again." else if (it.code == 429) "AniList is busy. Please try again in a minute." else "AniList could not load this right now (${it.code})."
+                            val message = if (it.code == 401) "AniList authorization expired. Sign in again." else if (it.code == 403) "AniList denied this request (403). Signing in again may not resolve this access restriction." else if (it.code == 429) "AniList is busy. Please try again in a minute." else "AniList could not load this right now (${it.code})."
                             continuation.resumeWithException(ApiException(message, it.code == 429 || it.code >= 500))
                         } else continuation.resume(it.body?.string() ?: "{}")
                     }
@@ -42,16 +42,8 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
     }
 
     suspend fun discover(catalog: Catalog, search: String, page: Int, filters: ExploreFilters = ExploreFilters()): CatalogPage {
-        val variables = JSONObject().put("page", page).put("type", if (catalog == Catalog.ANIME) "ANIME" else "MANGA")
-            .put("search", search.trim().ifEmpty { null })
-            .put("format", if (catalog == Catalog.NOVEL) "NOVEL" else filters.format.ifBlank { null } ?: JSONObject.NULL)
-            .put("excluded", if (catalog == Catalog.MANGA) JSONArray().put("NOVEL") else JSONObject.NULL)
-        filters.variables().keys().forEach { key -> variables.put(key, filters.variables().get(key)) }
-        val data = query("""query(${'$'}genre:String, ${'$'}tag:String, ${'$'}year:String, ${'$'}season:MediaSeason, ${'$'}status:MediaStatus, ${'$'}score:Int, ${'$'}episodes:Int, ${'$'}sort:[MediaSort], ${'$'}minEpisodes:Int, ${'$'}page:Int, ${'$'}type:MediaType, ${'$'}search:String, ${'$'}format:MediaFormat, ${'$'}excluded:[MediaFormat]) {
-            Page(page:${'$'}page, perPage:20) { pageInfo { hasNextPage }
-                media(type:${'$'}type, search:${'$'}search, format:${'$'}format, format_not_in:${'$'}excluded, isAdult:false, genre:${'$'}genre, tag:${'$'}tag, startDate_like:${'$'}year, season:${'$'}season, status:${'$'}status, averageScore_greater:${'$'}score, episodes_lesser:${'$'}episodes, sort:${'$'}sort, episodes_greater:${'$'}minEpisodes) { $MEDIA_FIELDS }
-            }
-        }""", variables).getJSONObject("Page")
+        val request = discoveryRequest(catalog,search,page,filters)
+        val data = query(request.first,request.second).getJSONObject("Page")
         return CatalogPage(data.getJSONArray("media").objects().map(::parseMedia), data.getJSONObject("pageInfo").optBoolean("hasNextPage"))
     }
     suspend fun detail(id: Int): MediaDetail {

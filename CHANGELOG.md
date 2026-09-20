@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.1 — Discovery request hardening
+
+- Omit unset GraphQL filter arguments and distinguish HTTP 403 from expired login.
+- Add regression coverage for filters and access denial.
+- Live query isolation was blocked by provider access protection; this is not a verified live API fix. See docs/releases/v1.1.1.md.
+
+
 ## 1.1.0 — 20 September 2026
 
 - Search your collection; filter Anime/Manga/Novels and tracking status; sort by recent updates, title or score.

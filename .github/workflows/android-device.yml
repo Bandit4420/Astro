@@ -40,6 +40,8 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics -partition-size 2048
           emulator-boot-timeout: 300
           script: |
+            adb shell svc wifi disable
+            adb shell svc data disable
             ./gradlew --no-daemon :app:connectedDebugAndroidTest
             mkdir -p app/build/device-evidence
             adb pull /sdcard/Pictures/AstroTest app/build/device-evidence/screenshots

@@ -20,7 +20,7 @@ A native Android home for your stories. Built for the small moments between epis
 
 Astro is moving from the web into native Android: midnight-black screens, artwork-inspired accents, quick progress updates, and notifications that belong on your phone.
 
-**Version 1.1.0 — expanded native website parity.** Richer profiles, collection controls, discovery, people pages and Mission Control. Default AniList sign-in uses the existing website handoff without manual client setup. Phone account/notification checks and long-term release signing remain pending.
+**Version 1.1.1 — expanded native website parity.** Richer profiles, collection controls, discovery, people pages and Mission Control. Default AniList sign-in uses the existing website handoff without manual client setup. Phone account/notification checks and long-term release signing remain pending.
 
 ## Inside Astro
 
@@ -45,9 +45,9 @@ Artwork caches have explicit limits. Search is debounced, obsolete requests canc
 
 ## Download Astro 1.1
 
-**[Download Astro 1.1](https://github.com/Bandit4420/Astro/releases/tag/v1.1.0)** · [Release notes](docs/releases/v1.1.0.md)
+**[Download Astro 1.1](https://github.com/Bandit4420/Astro/releases/tag/v1.1.1)** · [Release notes](docs/releases/v1.1.1.md)
 
-Download `Astro-1.1.0.apk` from Assets. Android 12+ and private repository access are required.
+Download `Astro-1.1.1.apk` from Assets. Android 12+ and private repository access are required.
 
 This is a regular GitHub release built with the existing debug signing pipeline. Signing identities can differ between clean CI runners, so seamless upgrades are not guaranteed. Export a backup from 0.2 before installing. Version 0.1 has no export screen: do not uninstall it if you need its local progress.
 

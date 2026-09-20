@@ -32,6 +32,26 @@ class WebsiteParityTest {
             assertFalse(query.contains("statistics"));assertFalse(query.contains("favourites"))
         }finally{server.shutdown()}
     }
+    @Test fun `default discovery omits absent filters instead of sending null arguments`() {
+        val(q,v)=discoveryRequest(Catalog.ANIME,"",1,ExploreFilters())
+        assertFalse(q.contains("format_not_in"));assertFalse(q.contains("search:"));assertFalse(q.contains("format:"))
+        assertFalse(q.contains("episodes_lesser"));assertTrue(q.contains("sort:"))
+        assertFalse(v.has("excluded"));assertEquals("ANIME",v.getString("type"))
+    }
+    @Test fun `manga excludes novels and selected filters remain parameterized`() {
+        val(q,v)=discoveryRequest(Catalog.MANGA,"Quoted \"title\"",2,ExploreFilters(genre="Fantasy",minScore="80"))
+        assertTrue(q.contains("format_not_in:"));assertFalse(q.contains("Quoted"))
+        assertEquals("NOVEL",v.getJSONArray("excluded").getString(0));assertEquals(79,v.getInt("score"))
+        assertEquals("Fantasy",v.getString("genre"))
+    }
+    @Test fun `access denial is not presented as expired login`() = runBlocking {
+        val server=MockWebServer();server.start()
+        try {
+            server.enqueue(MockResponse().setResponseCode(403).setBody("{}"))
+            try {AniListApi(OkHttpClient(),server.url("/").toString()).discover(Catalog.ANIME,"",1);fail("Expected access denial")}
+            catch(e:ApiException){assertFalse(e.retryable);assertTrue(e.message!!.contains("access restriction"));assertFalse(e.message!!.contains("expired"))}
+        }finally{server.shutdown()}
+    }
     @Test fun `cast query sends requested language and preserves multiple actors`() = runBlocking {
         val server=MockWebServer();server.start()
         try {
