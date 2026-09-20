@@ -32,7 +32,7 @@ import com.bandit.astro.data.Preferences
     val effective=if(saver)p.copy(animations=false,blur=false,highRefresh=false) else p
     val owner=LocalLifecycleOwner.current
     DisposableEffect(context,owner,effective.highRefresh) {
-        val activity=context as? Activity
+        val activity=context.hostActivity()
         fun refresh(resumed:Boolean) {
             if(activity!=null) {
                 val current=activity.display?.mode
@@ -57,4 +57,10 @@ import com.bandit.astro.data.Preferences
         else progress.snapTo(1f)
     }
     return graphicsLayer {alpha=progress.value;translationY=(1f-progress.value)*distance}
+}
+
+private tailrec fun Context.hostActivity():Activity? = when(this) {
+    is Activity -> this
+    is android.content.ContextWrapper -> baseContext.hostActivity()
+    else -> null
 }

@@ -40,9 +40,11 @@ class NativeSmokeTest {
             app.preferences.theme("Liquid Glass");app.preferences.flag("glass",true);app.preferences.flag("blur",true)
             app.preferences.text("buttonAccent","#FFB5D0");app.preferences.text("navigationAccent","#C8B5FF")
         }
-        compose.waitForIdle();screenshot("06-liquid-glass")
+        compose.waitUntil(5000) {compose.onAllNodesWithTag("appearance:Liquid Glass:false").fetchSemanticsNodes().isNotEmpty()}
+        screenshot("06-liquid-glass")
         kotlinx.coroutines.runBlocking {app.preferences.flag("amoled",true)}
-        compose.waitForIdle();screenshot("07-amoled")
+        compose.waitUntil(5000) {compose.onAllNodesWithTag("appearance:Liquid Glass:true").fetchSemanticsNodes().isNotEmpty()}
+        screenshot("07-amoled")
         kotlinx.coroutines.runBlocking {
             app.preferences.theme("Astro");app.preferences.flag("amoled",false);app.preferences.flag("glass",false);app.preferences.flag("blur",false)
             app.preferences.text("buttonAccent","");app.preferences.text("navigationAccent","")

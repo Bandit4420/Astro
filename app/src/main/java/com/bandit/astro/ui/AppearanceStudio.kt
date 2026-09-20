@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
@@ -23,7 +24,7 @@ import com.bandit.astro.data.Preferences
 private val swatches=listOf("Mint" to "#A5E9CE","Ice" to "#98D8FF","Sakura" to "#FFB5D0","Lilac" to "#C8B5FF","Gold" to "#F5CE91","Coral" to "#FF9B91","White" to "#E0E3E8")
 
 @Composable internal fun AppearanceStudio(p:Preferences,m:AstroViewModel) {
-    Column(verticalArrangement=Arrangement.spacedBy(20.dp)) {
+    Column(Modifier.testTag("appearance:${p.theme}:${p.amoled}"),verticalArrangement=Arrangement.spacedBy(20.dp)) {
         SectionTitle("Appearance","A little more you. Every detail.")
         LazyRow(horizontalArrangement=Arrangement.spacedBy(12.dp)) {items(themeNames,key={it}) {name->
             val preview=when(name){"Sakura"->Color(0xFFFFB5D0);"Lavender","Cyberpunk"->Color(0xFFC8B5FF);"Golden Hour"->Color(0xFFF5CE91);"Ocean","Midnight Blue","Liquid Glass"->Color(0xFF98D8FF);else->Color(0xFFA5E9CE)}
@@ -99,4 +100,10 @@ private val swatches=listOf("Mint" to "#A5E9CE","Ice" to "#98D8FF","Sakura" to "
     val accent=parseAccent(LocalAppearance.current.buttonAccent,MaterialTheme.colorScheme.primary)
     OutlinedButton(onClick,modifier,enabled=enabled,colors=ButtonDefaults.outlinedButtonColors(contentColor=accent),
         border=BorderStroke(1.dp,accent.copy(alpha=if(enabled).5f else .15f)),content=content)
+}
+
+@Composable internal fun AstroProgressButton(onClick:()->Unit,enabled:Boolean,content:@Composable ()->Unit) {
+    val accent=parseAccent(LocalAppearance.current.buttonAccent,MaterialTheme.colorScheme.primary)
+    FilledTonalIconButton(onClick,enabled=enabled,colors=IconButtonDefaults.filledTonalIconButtonColors(
+        containerColor=accent,contentColor=accentContent(accent)),content=content)
 }

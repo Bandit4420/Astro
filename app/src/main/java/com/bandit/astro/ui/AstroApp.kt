@@ -261,7 +261,7 @@ internal fun EntryRow(entry: LibraryEntry, model: AstroViewModel) {
                 Text(entry.status.pretty(), fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
             }
             Column {
-                FilledTonalIconButton(onClick = { if(entry.format=="NOVEL") model.volumes(entry.mediaId,1) else model.increment(entry.mediaId) }, enabled = if(entry.format=="NOVEL") entry.totalVolumes<=0 || entry.volumes<entry.totalVolumes else entry.total <= 0 || entry.progress < entry.total) {
+                AstroProgressButton(onClick = { if(entry.format=="NOVEL") model.volumes(entry.mediaId,1) else model.increment(entry.mediaId) }, enabled = if(entry.format=="NOVEL") entry.totalVolumes<=0 || entry.volumes<entry.totalVolumes else entry.total <= 0 || entry.progress < entry.total) {
                     Icon(Icons.Rounded.Add, "Add one ${if(entry.format=="NOVEL") "volume" else if (entry.type == "ANIME") "episode" else "chapter"} to ${entry.title}")
                 }
                 IconButton(onClick = { if(entry.format=="NOVEL") model.volumes(entry.mediaId,-1) else model.decrement(entry.mediaId) }, enabled = if(entry.format=="NOVEL") entry.volumes>0 else entry.progress > 0) {

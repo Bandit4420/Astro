@@ -69,12 +69,12 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(24.dp)) {
         item {SectionTitle("Astro stats","Your collection at a glance")}
         item {Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Stat("${entries.count {it.status=="COMPLETED"}}","completed",Modifier.weight(1f));Stat("${entries.filter {it.type=="ANIME"}.sumOf {it.progress.toLong()*it.duration}/60}h","tracked runtime",Modifier.weight(1f));Stat(if(rated.isEmpty()) "—" else "${rated.map {it.score}.average().toInt()}","mean rating",Modifier.weight(1f))}}
-        item {SectionTitle("Collection status");RankChart(entries.groupingBy {it.status.pretty()}.eachCount().toList().sortedByDescending {it.second})}
-        item {SectionTitle("Favourite genres");RankChart(entries.flatMap {it.genres.split("|").filter(String::isNotBlank)}.groupingBy {it}.eachCount().toList().sortedByDescending {it.second}.take(8))}
-        item {SectionTitle("Most tracked studios");RankChart(entries.flatMap {it.studios.split("|").filter(String::isNotBlank)}.groupingBy {it}.eachCount().toList().sortedByDescending {it.second}.take(8))}
-        item {SectionTitle("Astro Wrapped","Based on progress changes recorded in this app, starting with this version.");Choice("Period",period,listOf("This month","This year","All recorded history")){period=it.ifBlank {"This month"}}}
+        item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){SectionTitle("Collection status");RankChart(entries.groupingBy {it.status.pretty()}.eachCount().toList().sortedByDescending {it.second})}}
+        item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){SectionTitle("Favourite genres");RankChart(entries.flatMap {it.genres.split("|").filter(String::isNotBlank)}.groupingBy {it}.eachCount().toList().sortedByDescending {it.second}.take(8))}}
+        item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){SectionTitle("Most tracked studios");RankChart(entries.flatMap {it.studios.split("|").filter(String::isNotBlank)}.groupingBy {it}.eachCount().toList().sortedByDescending {it.second}.take(8))}}
+        item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){SectionTitle("Astro Wrapped","Based on progress changes recorded in this app, starting with this version.");Choice("Period",period,listOf("This month","This year","All recorded history")){period=it.ifBlank {"This month"}}}}
         item {Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Stat("${events.filter {it.unit=="episode"}.sumOf {it.delta}.coerceAtLeast(0)}","net episodes",Modifier.weight(1f));Stat("${events.sumOf {it.minutes}.coerceAtLeast(0)/60}h","logged runtime",Modifier.weight(1f));Stat("${events.filter {it.unit!="episode"}.sumOf {it.delta}.coerceAtLeast(0)}","reading updates",Modifier.weight(1f))}}
-        item {SectionTitle("Viewing patterns","Positive progress updates by weekday; edits aren't a watch-time sensor.");RankChart(DayOfWeek.entries.map {day->day.name.pretty() to events.filter {it.delta>0 && Instant.ofEpochMilli(it.at).atZone(zone).dayOfWeek==day}.sumOf {it.delta}})}
+        item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){SectionTitle("Viewing patterns","Positive progress updates by weekday; edits aren't a watch-time sensor.");RankChart(DayOfWeek.entries.map {day->day.name.pretty() to events.filter {it.delta>0 && Instant.ofEpochMilli(it.at).atZone(zone).dayOfWeek==day}.sumOf {it.delta}})}}
         item {SectionTitle("Recent chapter & episode history")}
         items(events.take(30),key={it.id}) {e->Text("${entries.firstOrNull {it.mediaId==e.mediaId}?.title ?: "Title #${e.mediaId}"} · ${if(e.delta>0) "+" else ""}${e.delta} ${e.unit}\n${Instant.ofEpochMilli(e.at).atZone(zone).toLocalDate()}",fontSize=13.sp)}
     }
@@ -89,18 +89,18 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
     var wins by remember{mutableIntStateOf(records.wins())};var streak by remember{mutableIntStateOf(records.streak())}
     val done=rounds.isNotEmpty() && index>=rounds.size
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
-        item {Chibi(Modifier.size(84.dp));SectionTitle("Anime Quiz","Guess stories from covers, clues or metadata. No plot trivia.")}
+        item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){Chibi(Modifier.size(84.dp));SectionTitle("Anime Quiz","Guess stories from covers, clues or metadata. No plot trivia.")}}
         if(rounds.isEmpty()) {
             item {TextButton(onClick={m.loadQuizPool(catalog)},enabled=!loading) {Text("Refresh quiz titles")}}
             item {Row {Catalog.entries.forEach {c->FilterChip(selected=catalog==c,onClick={catalog=c},label={Text(c.label)})}}}
-            item {Choice("Mode",mode,listOf("Cover","Clues","Trivia")){mode=it.ifBlank {"Cover"}};Choice("Difficulty",difficulty,listOf("Easy","Medium","Hard","Hashira")){difficulty=it.ifBlank {"Easy"}}}
+            item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){Choice("Mode",mode,listOf("Cover","Clues","Trivia")){mode=it.ifBlank {"Cover"}};Choice("Difficulty",difficulty,listOf("Easy","Medium","Hard","Hashira")){difficulty=it.ifBlank {"Easy"}}}}
             item {Text("$wins quiz wins · $streak day streak");if(wins>=1)Text("🏆 First orbit mastered");if(wins>=10)Text("🌌 Ten quiz victories");if(wins>=100)Text("⚔ 100 trivia wins");if(records.mastered()>=10)Text("🌌 10 universes mastered")}
             item {AstroButton(onClick={rounds=quizRounds(pool,mode,difficulty in listOf("Hard","Hashira"));index=0;answer="";score=0},enabled=pool.size>=4 && !loading){Text(if(pool.size<4 || loading) "Waiting for AniList titles…" else "Start 10 rounds")}}
         } else if(done) {
-            item {SectionTitle("${score} / ${rounds.size}","Your knowledge this round: ${score*100/rounds.size}%");AstroButton(onClick={rounds=emptyList();index=0}) {Text("Play again")}}
+            item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){SectionTitle("${score} / ${rounds.size}","Your knowledge this round: ${score*100/rounds.size}%");AstroButton(onClick={rounds=emptyList();index=0}) {Text("Play again")}}}
         } else {
             val round=rounds[index]
-            item {Text("Question ${index+1} / ${rounds.size} · $score correct");SectionTitle(round.prompt)}
+            item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){Text("Question ${index+1} / ${rounds.size} · $score correct");SectionTitle(round.prompt)}}
             if(mode=="Cover")item {Cover(round.media.cover,"Mystery cover",Modifier.width(200.dp).height(280.dp).then(if(answer.isBlank() && difficulty!="Easy") Modifier.blur(if(difficulty=="Hashira") 20.dp else if(difficulty=="Hard") 12.dp else 5.dp) else Modifier))}
             if(mode=="Clues")item {round.clues.take(if(difficulty=="Hashira") 2 else if(difficulty=="Hard") 3 else 4).forEach {Text(it)}}
             items(round.choices){choice->AstroOutlinedButton(onClick={if(answer.isBlank()){answer=choice;if(choice==round.answer)score++}},enabled=answer.isBlank(),modifier=Modifier.fillMaxWidth()){Text(choice)}}
@@ -116,7 +116,7 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
     val genres=entries.flatMap {it.genres.split("|").filter(String::isNotBlank)}.distinct().sorted()
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
         item {SectionTitle("Let your orbit choose","Pick a title from Plan to watch / read")}
-        item {Choice("Mood / genre",genre,genres){genre=it};Choice("Minutes for one episode",time,listOf("15","25","45","90","180")){time=it}}
+        item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){Choice("Mood / genre",genre,genres){genre=it};Choice("Minutes for one episode",time,listOf("15","25","45","90","180")){time=it}}}
         item {AstroButton(onClick={pick=entries.filter {it.status=="PLANNING" && (genre.isBlank()||genre in it.genres.split("|")) && (time.isBlank()||it.type=="ANIME" && it.duration>0 && it.duration<=(time.toIntOrNull() ?: 0))}.randomOrNull();if(pick==null)m.announce("No planned titles match those filters.")}) {Text("Spin my orbit")}}
         pick?.let {e->item {MediaCard(e.asMedia(),Modifier.width(220.dp)){m.open(e.mediaId)}}}
     }
@@ -125,10 +125,10 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
     var name by rememberSaveable{mutableStateOf("")};val result by m.comparison.collectAsStateWithLifecycle();val error by m.comparisonError.collectAsStateWithLifecycle()
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(18.dp)) {
         item {SectionTitle("Two orbits, shared stories","Compare a public AniList profile. This does not sign in as them.")}
-        item {OutlinedTextField(name,{name=it.take(100)},label={Text("AniList username")},singleLine=true);AstroButton(onClick={m.compare(name)},enabled=name.isNotBlank()){Text("Compare tastes")}}
+        item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){OutlinedTextField(name,{name=it.take(100)},label={Text("AniList username")},singleLine=true);AstroButton(onClick={m.compare(name)},enabled=name.isNotBlank()){Text("Compare tastes")}}}
         if(error.isNotBlank())item {Text(error,color=MaterialTheme.colorScheme.error)}
         result?.let {(user,list)->val (percent,shared)=compatibility(entries,list)
-            item {Cover(user.avatar,user.name,Modifier.size(72.dp));SectionTitle(user.name,"${shared.size} shared stories · ${percent?.let {"$it% rating agreement"} ?: "No shared ratings yet"}");Text("Agreement = 100 − average rating difference, using shared rated titles on a 100-point scale.",fontSize=12.sp)}
+            item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){Cover(user.avatar,user.name,Modifier.size(72.dp));SectionTitle(user.name,"${shared.size} shared stories · ${percent?.let {"$it% rating agreement"} ?: "No shared ratings yet"}");Text("Agreement = 100 − average rating difference, using shared rated titles on a 100-point scale.",fontSize=12.sp)}}
             items(shared.sortedByDescending {if(it.first.score>0&&it.second.score>0) abs(it.first.score-it.second.score) else -1}.take(40),key={it.first.mediaId}) {(a,b)->TextButton(onClick={m.open(a.mediaId)}) {Text("${a.title}\nYou: ${a.score.takeIf {it>0} ?: "—"} · ${user.name}: ${b.score.takeIf {it>0} ?: "—"}")}}
         }
     }
@@ -142,7 +142,7 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
     val accent=MaterialTheme.colorScheme.primary
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(18.dp)) {
         item {SectionTitle("Anime constellations","Up to 240 collection stars · grouped by first genre · size follows your rating")}
-        item {OutlinedTextField(search,{search=it},label={Text("Find a star")},modifier=Modifier.fillMaxWidth());Text("Zoom · ${"%.1f".format(zoom)}×");Slider(zoom,{zoom=it},valueRange=1f..2.5f)}
+        item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)){OutlinedTextField(search,{search=it},label={Text("Find a star")},modifier=Modifier.fillMaxWidth());Text("Zoom · ${"%.1f".format(zoom)}×");Slider(zoom,{zoom=it},valueRange=1f..2.5f)}}
         item {BoxWithConstraints(Modifier.fillMaxWidth().height(360.dp)){val width=maxWidth;Box(Modifier.horizontalScroll(rememberScrollState()).verticalScroll(rememberScrollState())){Canvas(Modifier.width(width*zoom).height(360.dp*zoom).background(MaterialTheme.colorScheme.surfaceVariant,MaterialTheme.shapes.large).pointerInput(points){detectTapGestures {tap->val index=points.indices.minByOrNull {i->(Offset(points[i].x*size.width,points[i].y*size.height)-tap).getDistance()};if(index!=null)selected=stars[index].mediaId}}) {
             val active=stars.firstOrNull {it.mediaId==selected}
             if(active!=null){val from=points[stars.indexOf(active)];stars.forEachIndexed {i,e->if(e.mediaId!=selected&&e.genres.split("|").any {it.isNotBlank()&&it in active.genres.split("|")})drawLine(accent.copy(alpha=.25f),Offset(from.x*size.width,from.y*size.height),Offset(points[i].x*size.width,points[i].y*size.height),2f)}}
