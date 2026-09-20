@@ -12,16 +12,19 @@ data class ExploreFilters(val genre: String = "", val tag: String = "", val year
         .put("minEpisodes", minEpisodes.toIntOrNull()?.minus(1)).put("sort", JSONArray().put(sort))
 }
 data class UserProfile(val id: Int, val name: String, val avatar: String, val banner: String, val about: String,
-    val anime: JSONObject, val manga: JSONObject)
+    val anime: JSONObject, val manga: JSONObject, val favorites: List<Media> = emptyList(), val characters: List<Credit> = emptyList(), val staff: List<Credit> = emptyList())
 data class RemoteEntry(val entryId: Int, val entry: LibraryEntry)
 suspend fun AniListApi.viewer(token: String): UserProfile = profile(token = token)
 suspend fun AniListApi.profile(name: String? = null, token: String? = null): UserProfile {
     val field = if (name == null) "Viewer" else "User(name:${'$'}name)"
-    val stats = "count meanScore standardDeviation minutesWatched episodesWatched chaptersRead volumesRead genres(limit:8,sort:COUNT_DESC) { genre count }"
-    val d = query("query${if(name == null) "" else "(${'$'}name:String)"} { $field { id name avatar { large } bannerImage about statistics { anime { $stats } manga { $stats } } } }",
+    val stats = "count meanScore standardDeviation minutesWatched episodesWatched chaptersRead volumesRead statuses { status count } scores { score count } releaseYears { releaseYear count } genres(limit:8,sort:COUNT_DESC) { genre count minutesWatched }"
+    val d = query("query${if(name == null) "" else "(${'$'}name:String)"} { $field { id name avatar { large } bannerImage about favourites { anime(perPage:20) { nodes { ${AniListApi.MEDIA_FIELDS} isAdult } } characters(perPage:20) { nodes { id name { full } image { large } } } staff(perPage:20) { nodes { id name { full } image { large } } } } statistics { anime { $stats } manga { $stats } } } }",
         JSONObject().put("name", name), token).getJSONObject(if (name == null) "Viewer" else "User")
     return UserProfile(d.getInt("id"), d.text("name"), d.getJSONObject("avatar").text("large"), d.text("bannerImage"), d.text("about"),
-        d.optJSONObject("statistics")?.optJSONObject("anime") ?: JSONObject(), d.optJSONObject("statistics")?.optJSONObject("manga") ?: JSONObject())
+        d.optJSONObject("statistics")?.optJSONObject("anime") ?: JSONObject(), d.optJSONObject("statistics")?.optJSONObject("manga") ?: JSONObject(),
+        d.optJSONObject("favourites")?.optJSONObject("anime")?.optJSONArray("nodes")?.objects()?.filterNot { it.optBoolean("isAdult") }?.map(AniListApi::parseMedia).orEmpty(),
+        parseCredits(d.optJSONObject("favourites")?.optJSONObject("characters")?.optJSONArray("nodes")),
+        parseCredits(d.optJSONObject("favourites")?.optJSONObject("staff")?.optJSONArray("nodes")))
 }
 suspend fun AniListApi.remoteList(user: Int, token: String? = null): List<RemoteEntry> {
     val all = mutableListOf<RemoteEntry>()
@@ -55,16 +58,16 @@ suspend fun AniListApi.delete(entryId: Int, token: String) {
     val d = query("mutation(${'$'}id:Int) { DeleteMediaListEntry(id:${'$'}id) { deleted } }", JSONObject().put("id", entryId), token)
     check(d.getJSONObject("DeleteMediaListEntry").optBoolean("deleted")) { "AniList did not confirm removal." }
 }
-suspend fun AniListApi.cast(id: Int, page: Int): Pair<List<CastMember>, Boolean> {
-    val d = query("""query(${'$'}id:Int, ${'$'}page:Int) { Media(id:${'$'}id) {
+suspend fun AniListApi.cast(id: Int, page: Int, language: String = "JAPANESE"): Pair<List<CastMember>, Boolean> {
+    val d = query("""query(${'$'}id:Int, ${'$'}page:Int, ${'$'}language:StaffLanguage) { Media(id:${'$'}id) {
         characters(page:${'$'}page,perPage:25,sort:[ROLE,RELEVANCE,ID]) { pageInfo { hasNextPage } edges { role
-            node { id name { full } image { large } } voiceActors(language:JAPANESE,sort:RELEVANCE) { id name { full } image { large } }
+            node { id name { full } image { large } } voiceActors(language:${'$'}language,sort:RELEVANCE) { id name { full } image { large } }
         } }
-    } }""", JSONObject().put("id", id).put("page", page)).getJSONObject("Media").getJSONObject("characters")
+    } }""", JSONObject().put("id", id).put("page", page).put("language", language)).getJSONObject("Media").getJSONObject("characters")
     return d.getJSONArray("edges").objects().map { e ->
         val n=e.getJSONObject("node"); val a=e.optJSONArray("voiceActors")?.optJSONObject(0)
         CastMember(n.getInt("id"),n.getJSONObject("name").text("full"),n.getJSONObject("image").text("large"), e.text("role"),
-            a?.optJSONObject("name")?.text("full").orEmpty(),a?.optInt("id") ?: 0,a?.optJSONObject("image")?.text("large").orEmpty())
+            a?.optJSONObject("name")?.text("full").orEmpty(),a?.optInt("id") ?: 0,a?.optJSONObject("image")?.text("large").orEmpty(), parseCredits(e.optJSONArray("voiceActors")))
     } to d.getJSONObject("pageInfo").optBoolean("hasNextPage")
 }
 suspend fun AniListApi.studios(search: String): List<Pair<Int,String>> = query("query(${'$'}s:String) { Page(perPage:8) { studios(search:${'$'}s) { id name } } }",

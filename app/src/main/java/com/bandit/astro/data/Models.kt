@@ -12,17 +12,17 @@ data class Media(
     val total: Int = 0, val duration: Int = 0, val score: Int = 0, val year: Int = 0,
     val genres: List<String> = emptyList(), val nextEpisode: Int = 0, val nextAiring: Long = 0,
     val trailerId: String = "", val trailerSite: String = "", val malId: Int = 0,
-    val volumes: Int = 0, val studios: List<String> = emptyList()
+    val volumes: Int = 0, val studios: List<String> = emptyList(), val tags: List<String> = emptyList()
 ) { val unit: String get() = if (type == "ANIME") "episode" else "chapter" }
 
 data class CastMember(val id: Int, val name: String, val image: String, val role: String,
-    val actorName: String, val actorId: Int, val actorImage: String)
+    val actorName: String, val actorId: Int, val actorImage: String, val actors: List<Credit> = emptyList())
 data class Credit(val id: Int, val name: String, val image: String, val role: String)
 data class Relation(val media: Media, val relation: String)
 data class MediaDetail(val media: Media, val characters: List<CastMember>, val castPage: Int = 1,
     val moreCast: Boolean = false, val staff: List<Credit> = emptyList(), val relations: List<Relation> = emptyList(),
     val recommendations: List<Media> = emptyList())
-data class Person(val name: String, val image: String, val description: String, val works: List<Media> = emptyList(), val page: Int = 1, val more: Boolean = false)
+data class Person(val name: String, val image: String, val description: String, val works: List<Media> = emptyList(), val page: Int = 1, val more: Boolean = false, val nativeName: String = "", val facts: List<Pair<String,String>> = emptyList(), val actors: List<Credit> = emptyList(), val roles: List<Credit> = emptyList(), val moreRoles: Boolean = false)
 data class CatalogPage(val media: List<Media>, val hasNext: Boolean)
 data class Airing(val id: Int, val episode: Int, val airingAt: Long, val media: Media)
 

@@ -41,6 +41,15 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
     val quizPool = MutableStateFlow<List<Media>>(emptyList())
     val quizLoading = MutableStateFlow(false)
     val suggestions = MutableStateFlow<Pair<String,List<Media>>>("" to emptyList())
+    val suggestionSource=MutableStateFlow<Media?>(null)
+    val suggestionLoading=MutableStateFlow(false)
+    val suggestionError=MutableStateFlow("")
+    private var recommendationJob: Job? = null
+    val castLanguage=MutableStateFlow("JAPANESE")
+    val personLanguage=MutableStateFlow("JAPANESE")
+    val todayAirings=MutableStateFlow<List<Airing>>(emptyList())
+    val radarError=MutableStateFlow("")
+    private var radarJob: Job? = null
     val suggestionGenres=MutableStateFlow<List<String>>(emptyList())
     val songs = MutableStateFlow<Pair<List<Song>,List<Song>>?>(null)
     val songsError = MutableStateFlow("")
@@ -77,7 +86,7 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
         loadDiscovery()
         viewModelScope.launch { try { spotlight.value = app.api.discover(Catalog.ANIME,"",1).media } catch (_: Exception) {} }
         viewModelScope.launch { combine(account, app.preferences.flow) { session,p -> (session?.id ?: 0) to p.autoSync }.distinctUntilChanged().collect { (_, enabled) -> AutoSync.schedule(app,enabled) } }
-        viewModelScope.launch { account.map { it?.id }.distinctUntilChanged().collect { profile.value=null; profileError.value=""; comparison.value=null; suggestions.value="" to emptyList(); closeDetail(); refreshProfile() } }
+        viewModelScope.launch { account.map { it?.id }.distinctUntilChanged().collect { profile.value=null; profileError.value=""; comparison.value=null; recommendationJob?.cancel(); suggestions.value="" to emptyList(); suggestionSource.value=null; suggestionError.value=""; suggestionLoading.value=false; radarJob?.cancel();todayAirings.value=emptyList();radarError.value=""; closeDetail(); refreshProfile() } }
         viewModelScope.launch {
             app.preferences.flow.map { it.reminders }.distinctUntilChanged().collect { AiringNotifications.schedule(app, it) }
         }
@@ -94,18 +103,19 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
     }
     private suspend fun fetchDiscovery(more: Boolean) {
         val old = _discovery.value
-        if (more && (!old.hasMore || old.items.size >= 80)) return
+        if (more && !old.hasMore) return
         _discovery.value = old.copy(loading = true, error = null)
         try {
             val page = if (more) old.page + 1 else 1
             val result = if(old.filters.studioId>0) app.api.studio(old.filters.studioId,page,old.search,old.filters) else app.api.discover(old.catalog, old.search, page, old.filters)
-            val items = ((if (more) old.items else emptyList()) + result.media).distinctBy { it.id }.take(80)
-            _discovery.value = old.copy(items = items, page = page, hasMore = result.hasNext && items.size < 80, loading = false)
+            val items = ((if (more) old.items else emptyList()) + result.media).distinctBy { it.id }
+            _discovery.value = old.copy(items = items, page = page, hasMore = result.hasNext, loading = false)
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) { _discovery.value = old.copy(loading = false, error = friendly(e)) }
     }
     fun open(id: Int) {
         detailJob?.cancel(); castJob?.cancel(); castLoading.value=false; songsJob?.cancel(); songs.value=null; songsError.value=""; songsLoading.value=false; closePerson()
+        castLanguage.value="JAPANESE"
         val owner=account.value?.id ?: 0
         _detail.value = DetailState(id, detailCache[id], loading = detailCache[id] == null)
         detailJob = viewModelScope.launch {
@@ -121,10 +131,11 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun closeDetail() { detailJob?.cancel(); castJob?.cancel(); castLoading.value=false; songsJob?.cancel(); songs.value=null; songsError.value=""; songsLoading.value=false; castJob?.cancel();songsJob?.cancel(); closePerson(); _detail.value = DetailState() }
-    fun openPerson(id: Int, staff: Boolean) {
+    fun openPerson(id: Int, staff: Boolean, language: String = castLanguage.value) {
+        personLanguage.value=language
         personJob?.cancel(); _person.value = PersonState(id, staff)
         personJob = viewModelScope.launch {
-            try { _person.value = PersonState(id, staff, app.api.person(id, staff)) }
+            try { _person.value = PersonState(id, staff, app.api.person(id, staff, language=language)) }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { _person.value = PersonState(id, staff, error = friendly(e)) }
         }
@@ -204,15 +215,15 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
             catch(e:CancellationException){throw e} catch(e:Exception){if(account.value?.id==s.id) profileError.value=e.message ?: "Could not load profile."} }
     }
     fun moreCast() { val d=_detail.value.value ?: return; if(castLoading.value||!d.moreCast)return
-        castLoading.value=true; castJob=viewModelScope.launch { try { val (rows,more)=app.api.cast(d.media.id,d.castPage+1)
+        castLoading.value=true; castJob=viewModelScope.launch { try { val (rows,more)=app.api.cast(d.media.id,d.castPage+1,castLanguage.value)
             if(_detail.value.id==d.media.id) _detail.value=_detail.value.copy(value=d.copy(characters=(d.characters+rows).distinctBy { it.id },castPage=d.castPage+1,moreCast=more))
         } catch(e:CancellationException){throw e} catch(e:Exception){announce(e.message ?: "Could not load more characters.")} finally {castLoading.value=false} }
     }
     fun expandFranchise() {val d=_detail.value.value ?: return
         task {val relations=app.api.expandRelations(d.relations.map {it.media.id}.take(40));if(_detail.value.id==d.media.id)_detail.value=_detail.value.copy(value=_detail.value.value?.copy(relations=(d.relations+relations).distinctBy {it.media.id}));announce("Connected titles expanded")}
     }
-    fun moreWorks() { val s=_person.value ?: return;val p=s.value ?: return; if(!p.more)return
-        personJob?.cancel();personJob=viewModelScope.launch { try { val n=app.api.person(s.id,s.staff,p.page+1);_person.value=s.copy(value=n.copy(works=(p.works+n.works).distinctBy { it.id })) }
+    fun moreWorks() { val s=_person.value ?: return;val p=s.value ?: return; if(!p.more && !p.moreRoles)return
+        personJob?.cancel();personJob=viewModelScope.launch { try { val n=app.api.person(s.id,s.staff,p.page+1,personLanguage.value);_person.value=s.copy(value=n.copy(works=(p.works+n.works).distinctBy { it.id },actors=(p.actors+n.actors).distinctBy {it.id},roles=(p.roles+n.roles).distinctBy {it.id})) }
         catch(e:CancellationException){throw e} catch(e:Exception){announce(e.message ?: "Could not load works.")} }
     }
     fun loadSongs() { val id=_detail.value.value?.media?.malId ?: 0; if(id<=0||songsLoading.value)return
@@ -225,8 +236,31 @@ class AstroViewModel(application: Application) : AndroidViewModel(application) {
             songs.value=rows("openings") to rows("endings")
         } catch(e:CancellationException){throw e} catch(e:Exception){songsError.value=e.message ?: "Could not load songs."} finally {songsLoading.value=false} }
     }
-    fun recommend() { val entry=collection.filter { it.status=="COMPLETED" || it.score>=70 }.maxByOrNull { it.score } ?: return
-        task { val owner=account.value?.id; val result=app.api.detail(entry.mediaId); if(account.value?.id != owner) return@task; suggestionGenres.value=result.media.genres;suggestions.value=entry.title to result.recommendations.filter { m -> collection.none { it.mediaId==m.id } } }
+    fun recommend(id:Int=0) {
+        val entry=collection.filter { it.status=="COMPLETED" || it.score>=70 }.let { rows->rows.firstOrNull {it.mediaId==id} ?: rows.maxByOrNull {it.score} } ?: return
+        recommendationJob?.cancel();suggestions.value="" to emptyList();suggestionSource.value=null;suggestionLoading.value=true;suggestionError.value=""
+        val owner=account.value?.id
+        recommendationJob=viewModelScope.launch { try {
+            val result=app.api.detail(entry.mediaId)
+            if(account.value?.id==owner){suggestionSource.value=result.media;suggestionGenres.value=result.media.genres;suggestions.value=entry.title to result.recommendations.filter { m->collection.none {it.mediaId==m.id} }.sortedByDescending { genreOverlap(result.media,it) }}
+        }catch(e:CancellationException){throw e}catch(e:Exception){suggestionError.value=friendly(e)}finally{suggestionLoading.value=false} }
+    }
+    fun changeCastLanguage(language:String) {
+        val d=_detail.value.value ?: return
+        castJob?.cancel();castLanguage.value=language;castLoading.value=true
+        _detail.value=_detail.value.copy(value=d.copy(characters=emptyList(),castPage=0,moreCast=true))
+        castJob=viewModelScope.launch {try {val(rows,more)=app.api.cast(d.media.id,1,language)
+            if(_detail.value.id==d.media.id) _detail.value=_detail.value.copy(value=d.copy(characters=rows,castPage=1,moreCast=more))
+        }catch(e:CancellationException){throw e}catch(e:Exception){announce(friendly(e))}finally{castLoading.value=false}}
+    }
+    fun loadRadar(ids:List<Int>) {
+        radarJob?.cancel();todayAirings.value=emptyList();radarError.value="";if(ids.isEmpty())return
+        val owner=account.value?.id
+        radarJob=viewModelScope.launch {try {
+            val start=LocalDate.now().atStartOfDay(ZoneId.systemDefault());val rows=mutableListOf<Airing>();var page=1
+            do {val(batch,more)=app.api.schedule(start.toEpochSecond()-1,start.plusDays(1).toEpochSecond(),page,ids.take(50));rows+=batch;page++}while(more)
+            if(account.value?.id==owner)todayAirings.value=rows.distinctBy {it.id}.sortedBy {it.airingAt}
+        }catch(e:CancellationException){throw e}catch(e:Exception){radarError.value=friendly(e)}}
     }
     fun compare(name:String) { compareJob?.cancel();comparison.value=null;comparisonError.value="";val owner=account.value?.id ?: 0
         compareJob=viewModelScope.launch { try { val p=app.api.profile(name.trim());val entries=app.api.remoteList(p.id);if((account.value?.id ?: 0)==owner) comparison.value=p to entries.map { it.entry } }

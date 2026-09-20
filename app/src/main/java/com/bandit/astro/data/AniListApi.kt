@@ -67,18 +67,32 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
             val actor = edge.optJSONArray("voiceActors")?.optJSONObject(0)
             CastMember(node.getInt("id"), node.getJSONObject("name").text("full"), node.optJSONObject("image")?.text("large").orEmpty(),
                 edge.text("role"), actor?.optJSONObject("name")?.text("full").orEmpty(), actor?.optInt("id") ?: 0,
-                actor?.optJSONObject("image")?.text("large").orEmpty())
+                actor?.optJSONObject("image")?.text("large").orEmpty(), parseCredits(edge.optJSONArray("voiceActors")))
         }.orEmpty()
         return MediaDetail(parseMedia(data), characters, moreCast = data.getJSONObject("characters").getJSONObject("pageInfo").optBoolean("hasNextPage"),
             staff = data.optJSONObject("staff")?.optJSONArray("edges")?.objects()?.map { e -> val n=e.getJSONObject("node"); Credit(n.getInt("id"),n.getJSONObject("name").text("full"),n.optJSONObject("image")?.text("large").orEmpty(), e.text("role")) }.orEmpty(),
             relations = data.optJSONObject("relations")?.optJSONArray("edges")?.objects()?.mapNotNull { e -> e.optJSONObject("node")?.takeUnless { it.optBoolean("isAdult") }?.let { Relation(parseMedia(it), e.text("relationType")) } }.orEmpty(),
             recommendations = data.optJSONObject("recommendations")?.optJSONArray("nodes")?.objects()?.mapNotNull { it.optJSONObject("mediaRecommendation")?.takeUnless { n -> n.optBoolean("isAdult") }?.let(::parseMedia) }.orEmpty())
     }
-    suspend fun person(id: Int, staff: Boolean, page: Int = 1): Person {
+    suspend fun person(id: Int, staff: Boolean, page: Int = 1, language: String = "JAPANESE"): Person {
         val field = if (staff) "Staff" else "Character"
-        val data = query("""query(${'$'}id:Int) { $field(id:${'$'}id) { name { full } image { large } description ${if (staff) "staffMedia" else "media"}(page:$page, perPage:25, sort:POPULARITY_DESC) { pageInfo { hasNextPage } nodes { $MEDIA_FIELDS isAdult } } } }""",
-            JSONObject().put("id", id)).getJSONObject(field)
-        return Person(data.getJSONObject("name").text("full"), data.optJSONObject("image")?.text("large").orEmpty(), data.text("description"), data.getJSONObject(if (staff) "staffMedia" else "media").getJSONArray("nodes").objects().filterNot { it.optBoolean("isAdult") }.map(::parseMedia), page, data.getJSONObject(if (staff) "staffMedia" else "media").getJSONObject("pageInfo").optBoolean("hasNextPage"))
+        val facts = if(staff) "age languageV2 homeTown primaryOccupations yearsActive dateOfBirth { year month day }" else "age gender bloodType dateOfBirth { year month day }"
+        val connection = if(staff) "staffMedia" else "media"
+        val extra = if(staff) "characters(page:$page,perPage:25,sort:FAVOURITES_DESC) { pageInfo { hasNextPage } nodes { id name { full } image { large } } }" else ""
+        val edges = if(staff) "" else "edges { voiceActors(language:${if(language=="ENGLISH") "ENGLISH" else "JAPANESE"}) { id name { full } image { large } } }"
+        val data = query("""query(${'$'}id:Int) { $field(id:${'$'}id) { name { full native } image { large } description $facts
+            $connection(page:$page,perPage:25,sort:POPULARITY_DESC) { pageInfo { hasNextPage } nodes { $MEDIA_FIELDS isAdult } $edges } $extra } }""", JSONObject().put("id",id)).getJSONObject(field)
+        val works=data.getJSONObject(connection)
+        val birth=data.optJSONObject("dateOfBirth")
+        val birthday=listOf("year","month","day").map { birth?.optInt(it)?.takeIf { n->n>0 }?.toString() ?: "?" }.joinToString(" / ")
+        val rows=mutableListOf("Age" to data.text("age"),"Birthday" to birthday.takeUnless { it=="? / ? / ?" }.orEmpty())
+        if(staff) rows+=listOf("Language" to data.text("languageV2"),"Hometown" to data.text("homeTown"),"Occupations" to data.optJSONArray("primaryOccupations").strings().joinToString(", "),"Active years" to data.optJSONArray("yearsActive").strings().joinToString("–"))
+        else rows+=listOf("Gender" to data.text("gender"),"Blood type" to data.text("bloodType"))
+        return Person(data.getJSONObject("name").text("full"),data.optJSONObject("image")?.text("large").orEmpty(),data.text("description"),
+            works.getJSONArray("nodes").objects().filterNot { it.optBoolean("isAdult") }.map(::parseMedia),page,works.getJSONObject("pageInfo").optBoolean("hasNextPage"),
+            data.getJSONObject("name").text("native"), rows.filter { it.second.isNotBlank() },
+            works.optJSONArray("edges")?.objects()?.flatMap { parseCredits(it.optJSONArray("voiceActors")) }?.distinctBy { it.id }.orEmpty(),
+            parseCredits(data.optJSONObject("characters")?.optJSONArray("nodes")),data.optJSONObject("characters")?.optJSONObject("pageInfo")?.optBoolean("hasNextPage") ?: false)
     }
     suspend fun schedule(from: Long, to: Long, page: Int = 1, ids: List<Int>? = null): Pair<List<Airing>, Boolean> {
         val vars = JSONObject().put("from", from).put("to", to).put("page", page)
@@ -97,7 +111,7 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
     }
     companion object {
         internal const val MEDIA_FIELDS = """id idMal volumes studios(isMain:true) { nodes { name } } title { userPreferred native } coverImage { large color } bannerImage type format status
-            description(asHtml:false) episodes chapters duration averageScore seasonYear startDate { year } genres
+            tags { name isMediaSpoiler isGeneralSpoiler } description(asHtml:false) episodes chapters duration averageScore seasonYear startDate { year } genres
             nextAiringEpisode { episode airingAt } trailer { id site }"""
         internal fun parseMedia(value: JSONObject): Media {
             val cover = value.optJSONObject("coverImage")
@@ -110,6 +124,7 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
                 format = value.text("format"), status = value.text("status"), description = value.text("description"),
                 total = value.optInt(if (type == "ANIME") "episodes" else "chapters"), duration = value.optInt("duration"),
                 score = value.optInt("averageScore"), year = value.optJSONObject("startDate")?.optInt("year")?.takeIf { it > 0 } ?: value.optInt("seasonYear"),
+                tags = value.optJSONArray("tags")?.objects()?.filterNot { it.optBoolean("isMediaSpoiler") || it.optBoolean("isGeneralSpoiler") }?.map { it.text("name") }.orEmpty(),
                 genres = value.optJSONArray("genres")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(),
                 nextEpisode = airing?.optInt("episode") ?: 0, nextAiring = airing?.optLong("airingAt") ?: 0,
                 trailerId = trailer?.text("id").orEmpty(), trailerSite = trailer?.text("site").orEmpty(), malId = value.optInt("idMal"), volumes = value.optInt("volumes"), studios = value.optJSONObject("studios")?.optJSONArray("nodes")?.objects()?.map { it.text("name") }.orEmpty())

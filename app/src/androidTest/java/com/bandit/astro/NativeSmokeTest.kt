@@ -26,7 +26,11 @@ class NativeSmokeTest {
     @Test fun primaryNavigationAndProfileOpen() {
         compose.onNodeWithText("MISSION CONTROL").assertExists();screenshot("01-orbit")
         compose.onNodeWithText("Collection").performClick()
-        compose.onNodeWithText("Your collection").assertExists();screenshot("02-collection")
+        compose.onNodeWithText("Your collection").assertExists()
+        compose.onNodeWithText("Search your collection").performTextInput("Frieren")
+        compose.onNodeWithText("Novels").performClick()
+        compose.onNodeWithText("Search your collection").performTextClearance()
+        screenshot("02-collection")
         compose.onNodeWithText("Explore").performClick()
         compose.onNodeWithText("A whole world awaits").assertExists();screenshot("03-explore")
         compose.onNodeWithText("Settings").performClick()

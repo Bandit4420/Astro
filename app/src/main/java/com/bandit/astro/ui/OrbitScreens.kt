@@ -40,8 +40,11 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
             item{SectionTitle(user.name,"AniList profile #${user.id}")}
             item {Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Stat("${user.anime.optInt("minutesWatched")/60}h","watched",Modifier.weight(1f));Stat("${user.anime.optInt("episodesWatched")}","episodes",Modifier.weight(1f));Stat("${user.anime.optDouble("meanScore",0.0)}","mean score",Modifier.weight(1f))}}
             item {Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Stat("${user.manga.optInt("chaptersRead")}","chapters",Modifier.weight(1f));Stat("${user.manga.optInt("volumesRead")}","volumes",Modifier.weight(1f))}}
-            item {SectionTitle("Anime genres");RankChart(user.anime.optJSONArray("genres")?.objects()?.map {it.text("genre") to it.optInt("count")} .orEmpty())}
             item {SectionTitle("Manga genres");RankChart(user.manga.optJSONArray("genres")?.objects()?.map {it.text("genre") to it.optInt("count")}.orEmpty())}
+            item {ProfileCharts(user)}
+            item {SectionTitle("Favorite anime");LazyRow(horizontalArrangement=Arrangement.spacedBy(12.dp)){items(user.favorites,key={it.id}){media->MediaCard(media,Modifier.width(145.dp)){m.open(media.id)}}};if(user.favorites.isEmpty())Text("No favorite anime listed.")}
+            item {PeopleStrip("Favorite characters",user.characters){m.openPerson(it,false)}}
+            item {PeopleStrip("Favorite staff & voices",user.staff){m.openPerson(it,true)}}
             item {SectionTitle("About");RichAbout(user.about)}
         }
         if(error.isNotBlank())item {ErrorNotice(error){m.refreshProfile()}}
@@ -126,21 +129,23 @@ private val orbitTools=listOf("Profile","Stats & Wrapped","Anime Quiz","Roulette
     }
 }
 @Composable internal fun ConstellationScreen(entries:List<LibraryEntry>,m:AstroViewModel) {
-    val stars=remember(entries){entries.sortedByDescending {it.score}.take(100)};var selected by rememberSaveable{mutableIntStateOf(0)}
+    var search by rememberSaveable {mutableStateOf("")};var zoom by rememberSaveable {mutableFloatStateOf(1f)}
+    val stars=remember(entries,search){entries.filter {it.title.contains(search,true)}.sortedByDescending {it.score}.take(240)};var selected by rememberSaveable{mutableIntStateOf(0)}
     val genres=remember(stars){stars.flatMap {it.genres.split("|").filter(String::isNotBlank)}.distinct().sorted()}
     val points=remember(stars){stars.mapIndexed {i,e->val group=(genres.indexOf(e.genres.substringBefore("|")).coerceAtLeast(0)%8);val theta=group*2*PI/8;val r=.1+(i%6)*.019
         Offset((.5+cos(theta)*.28+cos(i*2.4)*r).toFloat(),(.5+sin(theta)*.28+sin(i*2.4)*r).toFloat())}}
     val accent=MaterialTheme.colorScheme.primary
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(18.dp)) {
-        item {SectionTitle("Anime constellations","Up to 100 collection stars · grouped by first genre · size follows your rating")}
-        item {Canvas(Modifier.fillMaxWidth().height(360.dp).background(MaterialTheme.colorScheme.surfaceVariant,MaterialTheme.shapes.large).pointerInput(points){detectTapGestures {tap->val index=points.indices.minByOrNull {i->(Offset(points[i].x*size.width,points[i].y*size.height)-tap).getDistance()};if(index!=null)selected=stars[index].mediaId}}) {
+        item {SectionTitle("Anime constellations","Up to 240 collection stars · grouped by first genre · size follows your rating")}
+        item {OutlinedTextField(search,{search=it},label={Text("Find a star")},modifier=Modifier.fillMaxWidth());Text("Zoom · ${"%.1f".format(zoom)}×");Slider(zoom,{zoom=it},valueRange=1f..2.5f)}
+        item {BoxWithConstraints(Modifier.fillMaxWidth().height(360.dp)){val width=maxWidth;Box(Modifier.horizontalScroll(rememberScrollState()).verticalScroll(rememberScrollState())){Canvas(Modifier.width(width*zoom).height(360.dp*zoom).background(MaterialTheme.colorScheme.surfaceVariant,MaterialTheme.shapes.large).pointerInput(points){detectTapGestures {tap->val index=points.indices.minByOrNull {i->(Offset(points[i].x*size.width,points[i].y*size.height)-tap).getDistance()};if(index!=null)selected=stars[index].mediaId}}) {
             val active=stars.firstOrNull {it.mediaId==selected}
             if(active!=null){val from=points[stars.indexOf(active)];stars.forEachIndexed {i,e->if(e.mediaId!=selected&&e.genres.split("|").any {it.isNotBlank()&&it in active.genres.split("|")})drawLine(accent.copy(alpha=.25f),Offset(from.x*size.width,from.y*size.height),Offset(points[i].x*size.width,points[i].y*size.height),2f)}}
             stars.forEachIndexed {i,e->val color=Color.hsv(((genres.indexOf(e.genres.substringBefore("|")).coerceAtLeast(0)*47)%360).toFloat(),.35f,1f);drawCircle(color,if(e.mediaId==selected) 12.dp.toPx() else (3+e.score/20).dp.toPx(),Offset(points[i].x*size.width,points[i].y*size.height))}
-        }}
-        stars.firstOrNull {it.mediaId==selected}?.let {e->item{SectionTitle(e.title,e.genres.replace("|"," • "));Button(onClick={m.open(e.mediaId)}){Text("Open story")}}}
+        }}}}
+        stars.firstOrNull {it.mediaId==selected}?.let {e->item{SectionTitle(e.title,e.genres.replace("|"," • "));Button(onClick={m.open(e.mediaId)}){Text("Open story")};Text("Nearby stories",fontWeight=FontWeight.Bold);stars.filter {other->other.mediaId!=e.mediaId&&other.genres.split("|").any {it.isNotBlank()&&it in e.genres.split("|")}}.sortedByDescending {genreOverlap(e.asMedia(),it.asMedia())}.take(8).forEach {other->TextButton(onClick={selected=other.mediaId}){Text(other.title)}}}}
         item {Text("Accessible title list",fontWeight=FontWeight.Bold)}
         items(stars,key={it.mediaId}) {e->TextButton(onClick={selected=e.mediaId}) {Text("${e.title} · ${e.score.takeIf {it>0} ?: "Unrated"}")}}
-        if(stars.isEmpty())item {Notice("Your galaxy is waiting","Add stories to your collection to see their connections.")}
+        if(stars.isEmpty())item {Notice(if(entries.isEmpty()) "Your galaxy is waiting" else "No matching stars",if(entries.isEmpty()) "Add stories to your collection to see their connections." else "Try a different title.")}
     }
 }

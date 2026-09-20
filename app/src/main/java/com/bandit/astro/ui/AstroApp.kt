@@ -63,6 +63,14 @@ fun AstroApp(model: AstroViewModel, notificationId: Int, consumed: () -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(model) { model.messages.collect { snackbar.showSnackbar(it) } }
+    var scheduleTipShown by rememberSaveable {mutableStateOf(false)}
+    LaunchedEffect(detail.id,person?.id,tab,extra) {
+        if(!scheduleTipShown&&detail.id==0&&person==null&&tab==0&&extra.isBlank()) {
+            kotlinx.coroutines.delay(3500);scheduleTipShown=true
+            val result=snackbar.showSnackbar(OrbitNotice("Never miss an episode!","Check your weekly release schedule for the next story in your orbit.","schedule","View schedule"))
+            if(result==SnackbarResult.ActionPerformed){tab=3;extra=""}
+        }
+    }
     LaunchedEffect(notificationId) { if (notificationId > 0) { model.open(notificationId); consumed() } }
     val accent = if (detail.id > 0) detail.value?.media?.accent.orEmpty() else ""
     AstroTheme(preferences, accent) {
@@ -72,7 +80,7 @@ fun AstroApp(model: AstroViewModel, notificationId: Int, consumed: () -> Unit) {
         Box(Modifier.fillMaxSize()) {
         AmbientBackdrop(preferences,detail.value?.media?.banner.orEmpty())
         Scaffold(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground,
-            snackbarHost = { SnackbarHost(snackbar) { ChibiSnackbar(it) } },
+            snackbarHost = { SnackbarHost(snackbar) { RichChibiNotice(it) } },
             topBar = {
                 TopAppBar(title = {
                     Column {
@@ -126,8 +134,6 @@ fun AstroApp(model: AstroViewModel, notificationId: Int, consumed: () -> Unit) {
 internal fun OrbitScreen(library: List<LibraryEntry>, discovery: Discovery, model: AstroViewModel, tool: (String)->Unit, explore: () -> Unit) {
     val account by model.account.collectAsStateWithLifecycle()
     val spotlight by model.spotlight.collectAsStateWithLifecycle()
-    val recommended by model.suggestions.collectAsStateWithLifecycle()
-    val sourceGenres by model.suggestionGenres.collectAsStateWithLifecycle()
     val current = library.filter { it.status in listOf("CURRENT","REPEATING") }
     val minutes = library.filter { it.type == "ANIME" }.sumOf { it.progress.toLong() * it.duration }
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
@@ -147,34 +153,24 @@ internal fun OrbitScreen(library: List<LibraryEntry>, discovery: Discovery, mode
         item { OrbitToolsRow(tool) }
         item { TonightPanel(library,model) }
         item { OrbitSummary(library,model) }
-        item { SectionTitle("Continue your story", "Watching & reading now") }
-        if (current.isEmpty()) item { Notice("Your orbit starts here", "Find a title, add it to your collection, then start tracking your episodes or chapters.", "Explore stories", explore) }
-        items(current.take(12), key = { "continue-${it.mediaId}" }) { entry -> EntryRow(entry, model) }
-        if (spotlight.isNotEmpty()) {
-            item { SectionTitle("In the spotlight", "Trending anime on AniList") }
-            item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    items(spotlight.take(10), key = { it.id }) { MediaCard(it, Modifier.width(170.dp)) { model.open(it.id) } }
-                }
-            }
-        } else if (discovery.loading) item { Loading() }
-        else if (discovery.error != null) item { ErrorNotice(discovery.error) { model.loadDiscovery() } }
-        item { SectionTitle("For you"); TextButton(onClick={model.recommend()}) { Text("Find recommendations from my collection") } }
-        if(recommended.second.isNotEmpty()) item { Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            Text("Because you liked ${recommended.first}",fontWeight=FontWeight.Bold)
-            Text("AniList community recommendations · shared genres shown below",style=MaterialTheme.typography.bodySmall)
-            LazyRow(horizontalArrangement=Arrangement.spacedBy(14.dp)) { items(recommended.second,key={it.id}) { m -> Column(Modifier.width(160.dp)) {
-                MediaCard(m) { model.open(m.id) }
-                val shared=m.genres.filter {it in sourceGenres};val union=(m.genres+sourceGenres).distinct().size
-                Text(if(shared.isEmpty()) "Recommended by AniList users" else "${if(union>0) shared.size*100/union else 0}% genre overlap · ${shared.joinToString(" • ")}",fontSize=11.sp)
-            } } }
-        } }
+        if(current.isEmpty()) item {Notice("Your orbit starts here","Add a story to start tracking.","Explore stories",explore)}
+        for((kind,heading) in listOf("ANIME" to "Continue watching","MANGA" to "Continue reading")) {
+            val rows=current.filter {it.type==kind}
+            if(rows.isNotEmpty())item {SectionTitle(heading)}
+            items(rows,key={"continue-${it.mediaId}"}){EntryRow(it,model)}
+        }
+        item {SpotlightCarousel(spotlight,library,model)}
+        item {RadarPanel(library,model)}
+        item {RecommendationsPanel(library,model)}
     }
 }
 
 @Composable
 internal fun ExploreScreen(state: Discovery, model: AstroViewModel) {
     val grid = rememberLazyGridState()
+    val owned by model.ownedCollection.collectAsStateWithLifecycle()
+    val account by model.account.collectAsStateWithLifecycle()
+    val ids=owned.takeIf {it.owner==(account?.id ?: 0)}?.entries?.map {it.mediaId}?.toSet().orEmpty()
     LaunchedEffect(grid, state.page, state.hasMore, state.loading, state.error) {
         snapshotFlow { grid.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }.distinctUntilChanged().collect { index ->
             if (state.items.isNotEmpty() && index >= state.items.size - 5 && state.hasMore && !state.loading && state.error == null)
@@ -195,7 +191,10 @@ internal fun ExploreScreen(state: Discovery, model: AstroViewModel) {
         ExploreFilterPanel(state,model)
         LazyVerticalGrid(columns = GridCells.Adaptive(145.dp), state = grid,
             contentPadding = PaddingValues(20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            items(state.items, key = { it.id }) { media -> MediaCard(media) { model.open(media.id) } }
+            items(state.items, key = { it.id }) { media -> Column {
+                MediaCard(media) { model.open(media.id) }
+                TextButton(onClick={model.add(media)},enabled=media.id !in ids){Text(if(media.id in ids) "✓ In collection" else "+ Add to collection")}
+            } }
             if (state.loading) item(span = { GridItemSpan(maxLineSpan) }) { Loading() }
             if (state.error != null) item(span = { GridItemSpan(maxLineSpan) }) {
                 ErrorNotice(state.error) { model.loadDiscovery(state.page > 0) }
@@ -203,10 +202,10 @@ internal fun ExploreScreen(state: Discovery, model: AstroViewModel) {
             if (!state.loading && state.error == null && state.items.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
                 Text("No stories found. Try another title.", Modifier.padding(vertical = 32.dp))
             }
-            if (state.items.isNotEmpty() && state.hasMore && !state.loading && state.error == null)
+            if (state.page>0 && state.hasMore && !state.loading && state.error == null)
                 item(span = { GridItemSpan(maxLineSpan) }) { TextButton(onClick = { model.loadDiscovery(true) }) { Text("Explore more") } }
             if (!state.hasMore) item(span = { GridItemSpan(maxLineSpan) }) {
-                Text(if (state.items.size >= 80) "80 stories explored. Search to discover something more specific." else "You're all caught up.",
+                Text("You're all caught up.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -216,6 +215,8 @@ internal fun ExploreScreen(state: Discovery, model: AstroViewModel) {
 @Composable
 internal fun CollectionScreen(library: List<LibraryEntry>, model: AstroViewModel) {
     var filter by rememberSaveable { mutableStateOf("ALL") }
+    var catalog by rememberSaveable {mutableStateOf("All")};var search by rememberSaveable {mutableStateOf("")};var sort by rememberSaveable {mutableStateOf("Recently updated")}
+    val entries=remember(library,catalog,filter,search,sort){collectionView(library,catalog,filter,search,sort)}
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { SectionTitle("Your collection", "${library.size} stories · changes saved on device") }
         item { LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -223,7 +224,8 @@ internal fun CollectionScreen(library: List<LibraryEntry>, model: AstroViewModel
                 FilterChip(selected = filter == status, onClick = { filter = status }, label = { Text(status.pretty()) })
             }
         } }
-        val entries = library.filter { filter == "ALL" || it.status == filter }
+        item {LazyRow(horizontalArrangement=Arrangement.spacedBy(8.dp)){items(listOf("All","Anime","Manga","Novels")){kind->FilterChip(selected=catalog==kind,onClick={catalog=kind},label={Text(kind)})}}}
+        item {OutlinedTextField(search,{search=it},label={Text("Search your collection")},singleLine=true,modifier=Modifier.fillMaxWidth());Choice("Sort collection",sort,listOf("Recently updated","Title A–Z","Highest score")){sort=it.ifBlank {"Recently updated"}};Text("${entries.size} matching stories",fontSize=12.sp)}
         if (entries.isEmpty()) item { Notice("Room for a new story", "Add titles from Explore to start your collection.") }
         items(entries, key = { it.mediaId }) { EntryRow(it, model) }
     }
@@ -243,7 +245,7 @@ internal fun EntryRow(entry: LibraryEntry, model: AstroViewModel) {
             }
             Column {
                 FilledTonalIconButton(onClick = { if(entry.format=="NOVEL") model.volumes(entry.mediaId,1) else model.increment(entry.mediaId) }, enabled = if(entry.format=="NOVEL") entry.totalVolumes<=0 || entry.volumes<entry.totalVolumes else entry.total <= 0 || entry.progress < entry.total) {
-                    Icon(Icons.Rounded.Add, "Add one ${if (entry.type == "ANIME") "episode" else "chapter"} to ${entry.title}")
+                    Icon(Icons.Rounded.Add, "Add one ${if(entry.format=="NOVEL") "volume" else if (entry.type == "ANIME") "episode" else "chapter"} to ${entry.title}")
                 }
                 IconButton(onClick = { if(entry.format=="NOVEL") model.volumes(entry.mediaId,-1) else model.decrement(entry.mediaId) }, enabled = if(entry.format=="NOVEL") entry.volumes>0 else entry.progress > 0) {
                     Text("−1", fontSize = 14.sp)
@@ -261,6 +263,7 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
     val hidden = spoilerSafe && !revealed
     val media = state.value?.media
     val appearance=LocalAppearance.current
+    val language by model.castLanguage.collectAsStateWithLifecycle()
     if (media == null) { if (state.error != null) ErrorNotice(state.error) { model.open(state.id) } else Loading(); return }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(22.dp), contentPadding = PaddingValues(bottom = 28.dp)) {
         item {
@@ -293,6 +296,7 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
                     }
                 }
             }
+            InlineTrailer(media)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (media.trailerSite == "youtube" && media.trailerId.isNotBlank()) OutlinedButton(onClick = {
                     openLink(context, "https://www.youtube.com/watch?v=${Uri.encode(media.trailerId)}")
@@ -305,15 +309,17 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
             }
         } }
         if (!hidden) {
-            item { Column(Modifier.padding(horizontal = 20.dp)) { SectionTitle("Characters & voices", "Japanese cast · main to supporting") } }
+            item { Column(Modifier.padding(horizontal = 20.dp)) { SectionTitle("Characters & voices", "Main to supporting")
+                if(media.type=="ANIME")Row {listOf("JAPANESE","ENGLISH").forEach {lang->FilterChip(selected=language==lang,onClick={model.changeCastLanguage(lang)},label={Text(lang.pretty())})}}
+            } }
             item { LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(state.value?.characters.orEmpty(), key = { it.id }) { character ->
                     Column(Modifier.width(136.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Cover(character.image, character.name, Modifier.fillMaxWidth().height(170.dp).clickable { model.openPerson(character.id, false) })
                         Text(character.name, fontWeight = FontWeight.Bold, maxLines = 2, modifier = Modifier.clickable { model.openPerson(character.id, false) })
                         Text(character.role.pretty(), fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
-                        if (character.actorId > 0) TextButton(onClick = { model.openPerson(character.actorId, true) }, contentPadding = PaddingValues(0.dp)) {
-                            Text(character.actorName, fontWeight = FontWeight.Normal, fontSize = 12.sp, maxLines = 2)
+                        character.actors.ifEmpty {if(character.actorId>0)listOf(Credit(character.actorId,character.actorName,character.actorImage,"")) else emptyList()}.forEach {actor->
+                            TextButton(onClick={model.openPerson(actor.id,true)},contentPadding=PaddingValues(0.dp)){Text(actor.name,fontSize=12.sp,maxLines=2)}
                         }
                     }
                 }
@@ -350,7 +356,8 @@ internal fun PersonScreen(state: PersonState, cast: List<CastMember>, spoilers: 
         if (person == null) item { if (state.error != null) ErrorNotice(state.error) { model.openPerson(state.id, state.staff) } else Loading() }
         else {
             item { Cover(person.image, person.name, Modifier.width(200.dp).height(260.dp)) }
-            item { Text(person.name, fontSize = 30.sp, fontWeight = FontWeight.Bold) }
+            item { Text(person.name, fontSize = 30.sp, fontWeight = FontWeight.Bold);if(person.nativeName.isNotBlank())Text(person.nativeName) }
+            if(!spoilers||revealed)item {person.facts.forEach {(label,value)->Text("$label · $value",fontSize=13.sp)}}
             item {
                 if (spoilers && !revealed) Notice("Biography hidden", "Biographies may mention events beyond your progress.", "Reveal biography", { revealed = true })
                 else RichAbout(person.description,revealSpoilers=true)
@@ -358,17 +365,15 @@ internal fun PersonScreen(state: PersonState, cast: List<CastMember>, spoilers: 
             if(!spoilers || revealed) {
                 item { SectionTitle("Other works") }
                 item { LazyRow(horizontalArrangement=Arrangement.spacedBy(14.dp)) { items(person.works,key={it.id}) { m -> MediaCard(m,Modifier.width(150.dp)) { model.open(m.id) } } } }
-                if(person.more) item { TextButton(onClick={model.moreWorks()}) { Text("More works") } }
-            }
-            val actor = if (!state.staff) cast.firstOrNull { it.id == state.id && it.actorId > 0 } else null
-            if (actor != null) item {
-                SectionTitle("Japanese voice actor")
-                Spacer(Modifier.height(12.dp))
-                Row(Modifier.clickable { model.openPerson(actor.actorId, true) }, horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Cover(actor.actorImage, actor.actorName, Modifier.width(80.dp).height(104.dp))
-                    Text(actor.actorName, fontWeight = FontWeight.SemiBold)
+                if(state.staff)item {PeopleStrip("Characters voiced",person.roles){model.openPerson(it,false)}}
+                else item {
+                    val lang by model.personLanguage.collectAsStateWithLifecycle()
+                    Row{listOf("JAPANESE","ENGLISH").forEach {l->FilterChip(selected=lang==l,onClick={model.openPerson(state.id,false,l)},label={Text(l.pretty())})}}
+                    PeopleStrip("Voice actors",person.actors){model.openPerson(it,true)}
                 }
+                if(person.more||person.moreRoles) item { TextButton(onClick={model.moreWorks()}) { Text("More works & credits") } }
             }
+
         }
     }
 }
