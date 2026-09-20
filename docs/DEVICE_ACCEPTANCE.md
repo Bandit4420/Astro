@@ -4,7 +4,7 @@ These checks remain pending; this checklist is not a record of success.
 
 ## Account and sync
 
-Use a disposable AniList account and configure the separate native OAuth client described in [ANILIST_ANDROID.md](ANILIST_ANDROID.md).
+Use a disposable AniList account and use Profile → Sign in with AniList → Continue with AniList → Open Astro.
 
 1. Sign in and confirm the account name/avatar and both imported lists.
 2. Change episode, chapter, volume, status and rating; sync and compare exact values on AniList.
@@ -27,6 +27,6 @@ Measure cold start, scrolling, memory after many covers and overnight idle batte
 
 ## Visual and catalog review
 
-Check Anime/Manga/Novels, filters and 80-title pagination, collection controls, local/IST schedule and calendar export. Review cast/actor biographies and pagination, trailers, OP/ED below characters with source-supplied coverage and missing-data states.
+Check Anime/Manga/Novels, filters and pagination past 80 titles, collection controls, local/IST schedule and calendar export. Review Japanese/English cast/actor facts, roles and pagination, inline/external trailers, OP/ED below characters with source-supplied coverage and missing-data states.
 
 Compare dynamic accents, AMOLED, glass and blur toggles, small screens, large fonts, landscape and Android back navigation. Verify profile images and spoiler reveals, separate quiz modes, recorded-history stats, roulette, compatibility and accessible constellation navigation.

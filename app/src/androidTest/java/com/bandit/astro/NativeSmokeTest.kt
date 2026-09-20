@@ -26,14 +26,34 @@ class NativeSmokeTest {
     @Test fun primaryNavigationAndProfileOpen() {
         compose.onNodeWithText("MISSION CONTROL").assertExists();screenshot("01-orbit")
         compose.onNodeWithText("Collection").performClick()
-        compose.onNodeWithText("Your collection").assertExists();screenshot("02-collection")
+        compose.onNodeWithText("Your collection").assertExists()
+        compose.onNodeWithText("Search your collection").performTextInput("Frieren")
+        compose.onNodeWithText("Novels").performClick()
+        compose.onNodeWithText("Search your collection").performTextClearance()
+        screenshot("02-collection")
         compose.onNodeWithText("Explore").performClick()
         compose.onNodeWithText("A whole world awaits").assertExists();screenshot("03-explore")
         compose.onNodeWithText("Settings").performClick()
         compose.onNodeWithText("Make yourself at home").assertExists();screenshot("04-settings")
+        val app=compose.activity.application as AstroApplication
+        kotlinx.coroutines.runBlocking {
+            app.preferences.theme("Liquid Glass");app.preferences.flag("glass",true);app.preferences.flag("blur",true)
+            app.preferences.text("buttonAccent","#FFB5D0");app.preferences.text("navigationAccent","#C8B5FF")
+        }
+        compose.waitUntil(5000) {compose.onAllNodesWithTag("appearance:Liquid Glass:false").fetchSemanticsNodes().isNotEmpty()}
+        compose.onNodeWithTag("settings-list").performTouchInput {swipeUp()}
+        screenshot("06-liquid-glass")
+        kotlinx.coroutines.runBlocking {app.preferences.flag("amoled",true)}
+        compose.waitUntil(5000) {compose.onAllNodesWithTag("appearance:Liquid Glass:true").fetchSemanticsNodes().isNotEmpty()}
+        screenshot("07-amoled")
+        kotlinx.coroutines.runBlocking {
+            app.preferences.theme("Astro");app.preferences.flag("amoled",false);app.preferences.flag("glass",false);app.preferences.flag("blur",false)
+            app.preferences.text("buttonAccent","");app.preferences.text("navigationAccent","")
+        }
         compose.onNodeWithContentDescription("Profile & sign in").performClick()
         compose.onNodeWithText("AniList account").assertExists()
-        compose.onNodeWithText("Set up native login").performClick()
+        compose.onNodeWithText("Sign in with AniList").assertIsEnabled()
+        compose.onNodeWithText("Advanced login settings").performClick()
         compose.onNodeWithText("Native client ID").assertExists();screenshot("05-account")
     }
 }

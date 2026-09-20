@@ -22,11 +22,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import dev.chrisbanes.haze.*
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,18 +65,33 @@ fun AstroApp(model: AstroViewModel, notificationId: Int, consumed: () -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(model) { model.messages.collect { snackbar.showSnackbar(it) } }
+    var scheduleTipShown by rememberSaveable {mutableStateOf(false)}
+    LaunchedEffect(detail.id,person?.id,tab,extra) {
+        if(!scheduleTipShown&&detail.id==0&&person==null&&tab==0&&extra.isBlank()) {
+            kotlinx.coroutines.delay(3500);scheduleTipShown=true
+            val result=snackbar.showSnackbar(OrbitNotice("Never miss an episode!","Check your weekly release schedule for the next story in your orbit.","schedule","View schedule"))
+            if(result==SnackbarResult.ActionPerformed){tab=3;extra=""}
+        }
+    }
     LaunchedEffect(notificationId) { if (notificationId > 0) { model.open(notificationId); consumed() } }
     val accent = if (detail.id > 0) detail.value?.media?.accent.orEmpty() else ""
-    AstroTheme(preferences, accent) {
+    val effective=powerAwarePreferences(preferences)
+    AstroTheme(effective, accent) {
+        val haze=remember {HazeState()}
+        val glass=effective.glass && !effective.amoled && effective.theme!="AMOLED"
+        val background=MaterialTheme.colorScheme.background
+        val glassStyle=HazeStyle(backgroundColor=background,tint=HazeTint(background.copy(alpha=effective.transparency)),blurRadius=effective.blurAmount.dp,noiseFactor=0f)
+        val chrome=if(glass)Modifier.hazeEffect(haze,glassStyle) {blurEnabled=effective.blur && HazeDefaults.blurEnabled()} else Modifier
+        val navAccent=parseAccent(effective.navigationAccent,MaterialTheme.colorScheme.primary)
         BackHandler(enabled = person != null || detail.id > 0 || tab != 0 || extra.isNotBlank()) {
             when { person != null -> model.closePerson(); detail.id > 0 -> model.closeDetail(); extra.isNotBlank() -> extra=""; else -> tab = 0 }
         }
         Box(Modifier.fillMaxSize()) {
-        AmbientBackdrop(preferences,detail.value?.media?.banner.orEmpty())
-        Scaffold(containerColor = Color.Transparent,
-            snackbarHost = { SnackbarHost(snackbar) { ChibiSnackbar(it) } },
+        AmbientBackdrop(effective,detail.value?.media?.banner.orEmpty(),if(glass)Modifier.hazeSource(haze) else Modifier)
+        Scaffold(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground,
+            snackbarHost = { SnackbarHost(snackbar) { RichChibiNotice(it) } },
             topBar = {
-                TopAppBar(title = {
+                TopAppBar(modifier=chrome,colors=TopAppBarDefaults.topAppBarColors(containerColor=if(glass)Color.Transparent else background), title = {
                     Column {
                         Text(if (person != null) "People & stories" else if (detail.id > 0) "In your universe" else "astro.",
                             fontWeight = FontWeight.ExtraBold, fontSize = if (detail.id > 0) 20.sp else 30.sp)
@@ -96,15 +113,21 @@ fun AstroApp(model: AstroViewModel, notificationId: Int, consumed: () -> Unit) {
                 })
             },
             bottomBar = {
-                if (detail.id == 0 && person == null) NavigationBar {
+                if (detail.id == 0 && person == null) Box(Modifier.navigationBarsPadding().padding(horizontal=12.dp,vertical=8.dp)) {
+                NavigationBar(modifier=Modifier.clip(RoundedCornerShape(26.dp)).then(chrome).border(1.dp,MaterialTheme.colorScheme.outline.copy(alpha=.25f),RoundedCornerShape(26.dp)),
+                    containerColor=if(glass)Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
+                    windowInsets=WindowInsets(0,0,0,0),tonalElevation=0.dp) {
                     destinations.forEachIndexed { index, item ->
                         NavigationBarItem(selected = tab == index, onClick = { extra=""; tab = index },
-                            icon = { Icon(item.icon, item.name) }, label = { Text(item.name, fontSize = 10.sp) })
+                            icon = { Icon(item.icon, item.name) }, label = { Text(item.name, style=MaterialTheme.typography.labelSmall,maxLines=1) },
+                            colors=NavigationBarItemDefaults.colors(selectedIconColor=navAccent,selectedTextColor=navAccent,indicatorColor=navAccent.copy(alpha=.13f)))
                     }
-                }
+                } }
             }
         ) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding)) {
+            val route="${person?.id ?: 0}:${detail.id}:$extra:$tab"
+            CompositionLocalProvider(LocalBottomInset provides padding.calculateBottomPadding()) {
+            Box(Modifier.fillMaxSize().then(if(glass)Modifier.hazeSource(haze,zIndex=1f) else Modifier).padding(top=padding.calculateTopPadding()).pageEntrance(route,effective.animations)) {
                 when {
                     person != null -> PersonScreen(person!!, detail.value?.characters.orEmpty(), preferences.spoilers, model)
                     detail.id > 0 -> DetailScreen(detail, library.firstOrNull { it.mediaId == detail.id }, preferences.spoilers, model)
@@ -115,7 +138,7 @@ fun AstroApp(model: AstroViewModel, notificationId: Int, consumed: () -> Unit) {
                     tab == 3 -> ScheduleScreen(schedule, library, preferences, model)
                     else -> SettingsScreen(preferences, model) { extra=it }
                 }
-            }
+            } }
         }
     }
 }
@@ -126,11 +149,9 @@ fun AstroApp(model: AstroViewModel, notificationId: Int, consumed: () -> Unit) {
 internal fun OrbitScreen(library: List<LibraryEntry>, discovery: Discovery, model: AstroViewModel, tool: (String)->Unit, explore: () -> Unit) {
     val account by model.account.collectAsStateWithLifecycle()
     val spotlight by model.spotlight.collectAsStateWithLifecycle()
-    val recommended by model.suggestions.collectAsStateWithLifecycle()
-    val sourceGenres by model.suggestionGenres.collectAsStateWithLifecycle()
     val current = library.filter { it.status in listOf("CURRENT","REPEATING") }
     val minutes = library.filter { it.type == "ANIME" }.sumOf { it.progress.toLong() * it.duration }
-    LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+    LazyColumn(contentPadding = pagePadding(), verticalArrangement = Arrangement.spacedBy(22.dp)) {
         item { Column {
             Eyebrow("MISSION CONTROL")
             Text(account?.name?.let { "Good ${if(LocalTime.now().hour<12) "morning" else if(LocalTime.now().hour<18) "afternoon" else "evening"}, $it." } ?: "A little space for\nyour stories.", fontSize = 34.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
@@ -147,34 +168,24 @@ internal fun OrbitScreen(library: List<LibraryEntry>, discovery: Discovery, mode
         item { OrbitToolsRow(tool) }
         item { TonightPanel(library,model) }
         item { OrbitSummary(library,model) }
-        item { SectionTitle("Continue your story", "Watching & reading now") }
-        if (current.isEmpty()) item { Notice("Your orbit starts here", "Find a title, add it to your collection, then start tracking your episodes or chapters.", "Explore stories", explore) }
-        items(current.take(12), key = { "continue-${it.mediaId}" }) { entry -> EntryRow(entry, model) }
-        if (spotlight.isNotEmpty()) {
-            item { SectionTitle("In the spotlight", "Trending anime on AniList") }
-            item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    items(spotlight.take(10), key = { it.id }) { MediaCard(it, Modifier.width(170.dp)) { model.open(it.id) } }
-                }
-            }
-        } else if (discovery.loading) item { Loading() }
-        else if (discovery.error != null) item { ErrorNotice(discovery.error) { model.loadDiscovery() } }
-        item { SectionTitle("For you"); TextButton(onClick={model.recommend()}) { Text("Find recommendations from my collection") } }
-        if(recommended.second.isNotEmpty()) item { Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            Text("Because you liked ${recommended.first}",fontWeight=FontWeight.Bold)
-            Text("AniList community recommendations · shared genres shown below",style=MaterialTheme.typography.bodySmall)
-            LazyRow(horizontalArrangement=Arrangement.spacedBy(14.dp)) { items(recommended.second,key={it.id}) { m -> Column(Modifier.width(160.dp)) {
-                MediaCard(m) { model.open(m.id) }
-                val shared=m.genres.filter {it in sourceGenres};val union=(m.genres+sourceGenres).distinct().size
-                Text(if(shared.isEmpty()) "Recommended by AniList users" else "${if(union>0) shared.size*100/union else 0}% genre overlap · ${shared.joinToString(" • ")}",fontSize=11.sp)
-            } } }
-        } }
+        if(current.isEmpty()) item {Notice("Your orbit starts here","Add a story to start tracking.","Explore stories",explore)}
+        for((kind,heading) in listOf("ANIME" to "Continue watching","MANGA" to "Continue reading")) {
+            val rows=current.filter {it.type==kind}
+            if(rows.isNotEmpty())item {SectionTitle(heading)}
+            items(rows,key={"continue-${it.mediaId}"}){EntryRow(it,model)}
+        }
+        item {SpotlightCarousel(spotlight,library,model)}
+        item {RadarPanel(library,model)}
+        item {RecommendationsPanel(library,model)}
     }
 }
 
 @Composable
 internal fun ExploreScreen(state: Discovery, model: AstroViewModel) {
     val grid = rememberLazyGridState()
+    val owned by model.ownedCollection.collectAsStateWithLifecycle()
+    val account by model.account.collectAsStateWithLifecycle()
+    val ids=owned.takeIf {it.owner==(account?.id ?: 0)}?.entries?.map {it.mediaId}?.toSet().orEmpty()
     LaunchedEffect(grid, state.page, state.hasMore, state.loading, state.error) {
         snapshotFlow { grid.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }.distinctUntilChanged().collect { index ->
             if (state.items.isNotEmpty() && index >= state.items.size - 5 && state.hasMore && !state.loading && state.error == null)
@@ -183,7 +194,7 @@ internal fun ExploreScreen(state: Discovery, model: AstroViewModel) {
     }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 20.dp)) {
-            Text("A whole world awaits", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+            Text("A whole world awaits", style=MaterialTheme.typography.headlineMedium)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(Catalog.entries) { catalog -> FilterChip(selected = state.catalog == catalog,
                     onClick = { model.search("", catalog) }, label = { Text(catalog.label) }) }
@@ -194,8 +205,11 @@ internal fun ExploreScreen(state: Discovery, model: AstroViewModel) {
         }
         ExploreFilterPanel(state,model)
         LazyVerticalGrid(columns = GridCells.Adaptive(145.dp), state = grid,
-            contentPadding = PaddingValues(20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            items(state.items, key = { it.id }) { media -> MediaCard(media) { model.open(media.id) } }
+            contentPadding = pagePadding(), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            items(state.items, key = { it.id }) { media -> Column {
+                MediaCard(media) { model.open(media.id) }
+                TextButton(onClick={model.add(media)},enabled=media.id !in ids){Text(if(media.id in ids) "✓ In collection" else "+ Add to collection")}
+            } }
             if (state.loading) item(span = { GridItemSpan(maxLineSpan) }) { Loading() }
             if (state.error != null) item(span = { GridItemSpan(maxLineSpan) }) {
                 ErrorNotice(state.error) { model.loadDiscovery(state.page > 0) }
@@ -203,10 +217,10 @@ internal fun ExploreScreen(state: Discovery, model: AstroViewModel) {
             if (!state.loading && state.error == null && state.items.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
                 Text("No stories found. Try another title.", Modifier.padding(vertical = 32.dp))
             }
-            if (state.items.isNotEmpty() && state.hasMore && !state.loading && state.error == null)
+            if (state.page>0 && state.hasMore && !state.loading && state.error == null)
                 item(span = { GridItemSpan(maxLineSpan) }) { TextButton(onClick = { model.loadDiscovery(true) }) { Text("Explore more") } }
             if (!state.hasMore) item(span = { GridItemSpan(maxLineSpan) }) {
-                Text(if (state.items.size >= 80) "80 stories explored. Search to discover something more specific." else "You're all caught up.",
+                Text("You're all caught up.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -216,14 +230,21 @@ internal fun ExploreScreen(state: Discovery, model: AstroViewModel) {
 @Composable
 internal fun CollectionScreen(library: List<LibraryEntry>, model: AstroViewModel) {
     var filter by rememberSaveable { mutableStateOf("ALL") }
-    LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    var catalog by rememberSaveable {mutableStateOf("All")};var search by rememberSaveable {mutableStateOf("")};var sort by rememberSaveable {mutableStateOf("Recently updated")}
+    val entries=remember(library,catalog,filter,search,sort){collectionView(library,catalog,filter,search,sort)}
+    LazyColumn(contentPadding = pagePadding(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { SectionTitle("Your collection", "${library.size} stories · changes saved on device") }
         item { LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(listOf("ALL", "CURRENT", "PLANNING", "COMPLETED", "PAUSED", "DROPPED", "REPEATING")) { status ->
                 FilterChip(selected = filter == status, onClick = { filter = status }, label = { Text(status.pretty()) })
             }
         } }
-        val entries = library.filter { filter == "ALL" || it.status == filter }
+        item {LazyRow(horizontalArrangement=Arrangement.spacedBy(8.dp)){items(listOf("All","Anime","Manga","Novels")){kind->FilterChip(selected=catalog==kind,onClick={catalog=kind},label={Text(kind)})}}}
+        item {Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            OutlinedTextField(search,{search=it},label={Text("Search your collection")},singleLine=true,modifier=Modifier.fillMaxWidth())
+            Choice("Sort collection",sort,listOf("Recently updated","Title A–Z","Highest score")){sort=it.ifBlank {"Recently updated"}}
+            Text("${entries.size} matching stories",style=MaterialTheme.typography.bodySmall)
+        }}
         if (entries.isEmpty()) item { Notice("Room for a new story", "Add titles from Explore to start your collection.") }
         items(entries, key = { it.mediaId }) { EntryRow(it, model) }
     }
@@ -242,8 +263,8 @@ internal fun EntryRow(entry: LibraryEntry, model: AstroViewModel) {
                 Text(entry.status.pretty(), fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
             }
             Column {
-                FilledTonalIconButton(onClick = { if(entry.format=="NOVEL") model.volumes(entry.mediaId,1) else model.increment(entry.mediaId) }, enabled = if(entry.format=="NOVEL") entry.totalVolumes<=0 || entry.volumes<entry.totalVolumes else entry.total <= 0 || entry.progress < entry.total) {
-                    Icon(Icons.Rounded.Add, "Add one ${if (entry.type == "ANIME") "episode" else "chapter"} to ${entry.title}")
+                AstroProgressButton(onClick = { if(entry.format=="NOVEL") model.volumes(entry.mediaId,1) else model.increment(entry.mediaId) }, enabled = if(entry.format=="NOVEL") entry.totalVolumes<=0 || entry.volumes<entry.totalVolumes else entry.total <= 0 || entry.progress < entry.total) {
+                    Icon(Icons.Rounded.Add, "Add one ${if(entry.format=="NOVEL") "volume" else if (entry.type == "ANIME") "episode" else "chapter"} to ${entry.title}")
                 }
                 IconButton(onClick = { if(entry.format=="NOVEL") model.volumes(entry.mediaId,-1) else model.decrement(entry.mediaId) }, enabled = if(entry.format=="NOVEL") entry.volumes>0 else entry.progress > 0) {
                     Text("−1", fontSize = 14.sp)
@@ -261,8 +282,9 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
     val hidden = spoilerSafe && !revealed
     val media = state.value?.media
     val appearance=LocalAppearance.current
+    val language by model.castLanguage.collectAsStateWithLifecycle()
     if (media == null) { if (state.error != null) ErrorNotice(state.error) { model.open(state.id) } else Loading(); return }
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(22.dp), contentPadding = PaddingValues(bottom = 28.dp)) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(22.dp), contentPadding = PaddingValues(bottom = 28.dp+LocalBottomInset.current)) {
         item {
             Box(Modifier.fillMaxWidth().height(340.dp)) {
                 if(appearance.artwork) Cover(media.banner.ifBlank { media.cover }, "", Modifier.fillMaxSize(), rounded = false)
@@ -271,7 +293,7 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
                     Cover(media.cover, media.title, Modifier.width(104.dp).height(152.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Eyebrow(listOf(media.format.pretty(), media.year.takeIf { it > 0 }?.toString().orEmpty()).filter { it.isNotBlank() }.joinToString(" · "))
-                        Text(media.title, fontSize = 25.sp, lineHeight = 29.sp, fontWeight = FontWeight.Bold, maxLines = 5, overflow = TextOverflow.Ellipsis)
+                        Text(media.title, style=MaterialTheme.typography.headlineMedium, maxLines = 5, overflow = TextOverflow.Ellipsis)
                         if (media.nativeTitle.isNotBlank()) Text(media.nativeTitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -283,7 +305,7 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
             }
             Text("${if (media.score > 0) "★ ${media.score}%  ·  " else ""}${if (media.total > 0) media.total else "?"} ${media.unit}s  ·  ${media.status.pretty()}",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-            if (entry == null) Button(onClick = { model.add(media) }, modifier = Modifier.fillMaxWidth()) {
+            if (entry == null) AstroButton(onClick = { model.add(media) }, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Rounded.Add, null); Spacer(Modifier.width(8.dp)); Text("Add to my collection")
             } else {
                 EntryRow(entry, model)
@@ -293,8 +315,9 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
                     }
                 }
             }
+            InlineTrailer(media)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (media.trailerSite == "youtube" && media.trailerId.isNotBlank()) OutlinedButton(onClick = {
+                if (media.trailerSite == "youtube" && media.trailerId.isNotBlank()) AstroOutlinedButton(onClick = {
                     openLink(context, "https://www.youtube.com/watch?v=${Uri.encode(media.trailerId)}")
                 }) { Icon(Icons.Rounded.PlayArrow, null); Text("Trailer") }
                 TextButton(onClick = { openLink(context, "https://anilist.co/${if (media.type == "ANIME") "anime" else "manga"}/${media.id}") }) { Text("AniList ↗") }
@@ -305,15 +328,20 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
             }
         } }
         if (!hidden) {
-            item { Column(Modifier.padding(horizontal = 20.dp)) { SectionTitle("Characters & voices", "Japanese cast · main to supporting") } }
+            item { Column(Modifier.padding(horizontal = 20.dp)) { SectionTitle("Characters & voices", "Main to supporting")
+                if(media.type=="ANIME")Row {listOf("JAPANESE","ENGLISH").forEach {lang->FilterChip(selected=language==lang,onClick={model.changeCastLanguage(lang)},label={Text(lang.pretty())})}}
+            } }
             item { LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(state.value?.characters.orEmpty(), key = { it.id }) { character ->
                     Column(Modifier.width(136.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Cover(character.image, character.name, Modifier.fillMaxWidth().height(170.dp).clickable { model.openPerson(character.id, false) })
                         Text(character.name, fontWeight = FontWeight.Bold, maxLines = 2, modifier = Modifier.clickable { model.openPerson(character.id, false) })
                         Text(character.role.pretty(), fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
-                        if (character.actorId > 0) TextButton(onClick = { model.openPerson(character.actorId, true) }, contentPadding = PaddingValues(0.dp)) {
-                            Text(character.actorName, fontWeight = FontWeight.Normal, fontSize = 12.sp, maxLines = 2)
+                        character.actors.ifEmpty {if(character.actorId>0)listOf(Credit(character.actorId,character.actorName,character.actorImage,"")) else emptyList()}.forEach {actor->
+                            Row(Modifier.fillMaxWidth().clickable {model.openPerson(actor.id,true)}.padding(vertical=4.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(7.dp)) {
+                                Cover(actor.image,actor.name,Modifier.size(32.dp))
+                                Text(actor.name,style=MaterialTheme.typography.labelMedium,maxLines=2,modifier=Modifier.weight(1f))
+                            }
                         }
                     }
                 }
@@ -346,11 +374,11 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
 internal fun PersonScreen(state: PersonState, cast: List<CastMember>, spoilers: Boolean, model: AstroViewModel) {
     var revealed by rememberSaveable(state.id, spoilers) { mutableStateOf(false) }
     val person = state.value
-    LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+    LazyColumn(contentPadding = pagePadding(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         if (person == null) item { if (state.error != null) ErrorNotice(state.error) { model.openPerson(state.id, state.staff) } else Loading() }
         else {
-            item { Cover(person.image, person.name, Modifier.width(200.dp).height(260.dp)) }
-            item { Text(person.name, fontSize = 30.sp, fontWeight = FontWeight.Bold) }
+            item {PersonHeader(person,state.staff)}
+            if(!spoilers||revealed)item { PersonFacts(person.facts) }
             item {
                 if (spoilers && !revealed) Notice("Biography hidden", "Biographies may mention events beyond your progress.", "Reveal biography", { revealed = true })
                 else RichAbout(person.description,revealSpoilers=true)
@@ -358,17 +386,15 @@ internal fun PersonScreen(state: PersonState, cast: List<CastMember>, spoilers: 
             if(!spoilers || revealed) {
                 item { SectionTitle("Other works") }
                 item { LazyRow(horizontalArrangement=Arrangement.spacedBy(14.dp)) { items(person.works,key={it.id}) { m -> MediaCard(m,Modifier.width(150.dp)) { model.open(m.id) } } } }
-                if(person.more) item { TextButton(onClick={model.moreWorks()}) { Text("More works") } }
-            }
-            val actor = if (!state.staff) cast.firstOrNull { it.id == state.id && it.actorId > 0 } else null
-            if (actor != null) item {
-                SectionTitle("Japanese voice actor")
-                Spacer(Modifier.height(12.dp))
-                Row(Modifier.clickable { model.openPerson(actor.actorId, true) }, horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Cover(actor.actorImage, actor.actorName, Modifier.width(80.dp).height(104.dp))
-                    Text(actor.actorName, fontWeight = FontWeight.SemiBold)
+                if(state.staff)item {PeopleStrip("Characters voiced",person.roles){model.openPerson(it,false)}}
+                else item {
+                    val lang by model.personLanguage.collectAsStateWithLifecycle()
+                    Row{listOf("JAPANESE","ENGLISH").forEach {l->FilterChip(selected=lang==l,onClick={model.openPerson(state.id,false,l)},label={Text(l.pretty())})}}
+                    PeopleStrip("Voice actors",person.actors){model.openPerson(it,true)}
                 }
+                if(person.more||person.moreRoles) item { TextButton(onClick={model.moreWorks()}) { Text("More works & credits") } }
             }
+
         }
     }
 }
@@ -386,7 +412,7 @@ internal fun ScheduleScreen(state: ScheduleState, library: List<LibraryEntry>, p
     val ids = remember(library) { library.map { it.mediaId }.toSet() }
     val now=rememberMinute()
     val episodes = state.items.filter { Instant.ofEpochSecond(it.airingAt).atZone(zone).toLocalDate() == date && (!onlyMine || it.media.id in ids) }
-    LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    LazyColumn(contentPadding = pagePadding(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { SectionTitle("This week in your universe", "${monday.format(DateTimeFormatter.ofPattern("d MMM"))} – ${monday.plusDays(6).format(DateTimeFormatter.ofPattern("d MMM"))} · ${zone.id}") }
         item { Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
             TextButton(onClick={offset--}) { Text("← Previous") }; TextButton(onClick={offset=0}) { Text("This week") };TextButton(onClick={offset++}) { Text("Next →") }
@@ -425,19 +451,10 @@ internal fun ScheduleScreen(state: ScheduleState, library: List<LibraryEntry>, p
 internal fun SettingsScreen(preferences: Preferences, model: AstroViewModel, tool:(String)->Unit) {
     val context = LocalContext.current
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> model.flag("reminders", granted) }
-    LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+    LazyColumn(modifier=Modifier.testTag("settings-list"),contentPadding = pagePadding(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item { SectionTitle("Make yourself at home", "Small details. Your kind of universe.") }
         item { OrbitToolsRow(tool) }
-        item { Column {
-            Eyebrow("APPEARANCE")
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(themeNames) { theme ->
-                    FilterChip(selected = preferences.theme == theme, onClick = { model.theme(theme) }, label = { Text(theme) })
-                }
-            }
-            ToggleRow("Artwork accents", "Let title artwork colour the whole screen.", preferences.dynamic) { model.flag("dynamic", it) }
-            AppearanceOptions(preferences,model)
-        } }
+        item { AppearanceStudio(preferences,model) }
         item { Column {
             Eyebrow("YOUR EXPERIENCE")
             ToggleRow("Spoiler protection", "Hide descriptions, biographies and cast until you reveal them.", preferences.spoilers) { model.flag("spoilers", it) }
@@ -462,7 +479,7 @@ internal fun SettingsScreen(preferences: Preferences, model: AstroViewModel, too
             Text("Native Compose screens · Android 12+", fontWeight = FontWeight.SemiBold)
             Text("Artwork cache: up to 64 MB on disk. Background requests run only when reminders or auto-sync are enabled. No analytics or advertising SDKs.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            Text("Astro 0.2.0 · Parity preview", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
+            Text("Astro ${context.packageManager.getPackageInfo(context.packageName,0).versionName}", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
         } }
     }
 }
@@ -495,7 +512,9 @@ internal fun Cover(url: String, description: String, modifier: Modifier, rounded
     val shape = RoundedCornerShape(if (rounded) LocalAppearance.current.radius.dp else 0.dp)
     Box(modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
         Icon(Icons.Rounded.Star, null, tint = MaterialTheme.colorScheme.primary.copy(alpha = .3f))
-        AsyncImage(model = coil.request.ImageRequest.Builder(LocalContext.current).data(url.ifBlank { null }).crossfade(LocalAppearance.current.animations).build(), contentDescription = description.ifBlank { null }, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+        val context=LocalContext.current;val animate=LocalAppearance.current.animations
+        val request=remember(url,context,animate) {coil.request.ImageRequest.Builder(context).data(url.ifBlank {null}).crossfade(if(animate) 180 else 0).build()}
+        AsyncImage(model = request, contentDescription = description.ifBlank { null }, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
     }
 }
 @Composable
@@ -503,7 +522,7 @@ internal fun Eyebrow(text: String) { Text(text, fontSize = 10.sp, letterSpacing 
 @Composable
 internal fun SectionTitle(title: String, subtitle: String = "") {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+        Text(title, style=MaterialTheme.typography.titleLarge)
         if (subtitle.isNotBlank()) Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -512,7 +531,7 @@ internal fun Stat(value: String, label: String, modifier: Modifier) {
     Surface(modifier, shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primaryContainer) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            Text(label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(label, style=MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -539,6 +558,8 @@ internal fun Loading() { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlig
 internal fun String.pretty() = lowercase().replace('_', ' ').replaceFirstChar { it.titlecase() }
 internal fun plainText(value: String) = HtmlCompat.fromHtml(value.replace("<br>", "\n"), HtmlCompat.FROM_HTML_MODE_LEGACY).toString().trim()
 internal fun openLink(context: android.content.Context, url: String) {
-    try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    val uri=Uri.parse(url)
+    if(uri.scheme !in listOf("https","http") || uri.host.isNullOrBlank())return
+    try { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
     catch (_: android.content.ActivityNotFoundException) { android.widget.Toast.makeText(context, "No app is available to open this link.", android.widget.Toast.LENGTH_SHORT).show() }
 }

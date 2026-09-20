@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.2.0 — Make yourself at home
+
+- Repair overlapping biography facts and restore native formatted, clickable links.
+- Add voice portraits, automatic cached OP/ED loading and clear retry states.
+- Reduce calendar query size and omit absent filters; separate profile sections and type-appropriate statistics.
+- Redesign theme previews, grouped settings, floating navigation and typography. Independent AMOLED, interface/button/navigation accents and heading styles.
+- Haze navigation blur on supported devices, Android 12 translucent fallback, page/button motion and optional high-refresh request.
+- Pause countdowns in background, respect Battery Saver, cache music and remove duplicate discovery fetch.
+- Add Android 12/15 UI checks and API regression tests. See [release notes](docs/releases/v1.2.0.md) for limitations and reference credits.
+
+## 1.1.1 — Discovery request hardening
+
+- Omit unset GraphQL filter arguments and distinguish HTTP 403 from expired login.
+- Add regression coverage for filters and access denial.
+- Live query isolation was blocked by provider access protection; this is not a verified live API fix. See docs/releases/v1.1.1.md.
+
+
+## 1.1.0 — 20 September 2026
+
+- Search your collection; filter Anime/Manga/Novels and tracking status; sort by recent updates, title or score.
+- AniList profile status donut, completed count, genre count/hours, rating distribution and release-year charts. Favorite anime, characters and staff open their native pages.
+- Rotating trending banners with pause/previous/next and quick add. Rotation pauses outside the foreground.
+- Explore continues beyond 80 titles; add directly from discovery cards. Filtered studio pages retain a manual continuation button even when a page has no matches.
+- Choose the favorite behind recommendations; see ranked genre overlap and shared tags with spoiler-marked tags excluded.
+- Japanese/English cast and character voice credits, multiple actors, structured biography facts and staff's voiced-character gallery.
+- Constellation title search, zoom/scroll, related-title inspector and up to 240 stars.
+- Optional inline YouTube trailer player with external fallback; player resources are released when closed.
+- Separate watching/reading sections and today's airing radar for up to 50 tracked anime.
+- Rich chibi notices and a schedule shortcut.
+
+
+Retains the 1.0.1 login handoff. See docs/releases/v1.1.0.md for validation limits and install notes.
+
+
 ## 1.0.0 — 14 September 2026
 
 - Publish the native app as a regular GitHub release, tagged v1.0 and marked Latest.
