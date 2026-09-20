@@ -1,0 +1,98 @@
+name: Publish verified Astro 1.1
+on:
+  push:
+    branches: [release/v1.1.0]
+permissions:
+  contents: read
+concurrency:
+  group: publish-astro-v1.1.0
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      SOURCE_SHA: 16fd1734a78ebf8b8e5a76b5dadc7b11fc4486d1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify source checks
+        run: |
+          gh api "repos/$GH_REPO/actions/runs/35489561247" > build.json
+          gh api "repos/$GH_REPO/actions/runs/35489561246" > device.json
+          gh api "repos/$GH_REPO" > repository.json
+          python - <<'PY'
+          import json, os
+          assert json.load(open('repository.json'))['private'] is True
+          for name in ['build','device']:
+              run=json.load(open(name+'.json'))
+              assert run['status']=='completed' and run['conclusion']=='success', name
+              assert run['head_sha']==os.environ['SOURCE_SHA'], name
+          PY
+      - name: Download verified APK and reports
+        run: |
+          gh run download 35489561247 --name Astro-Android-12-plus-preview-20 --dir release-assets
+          gh run download 35489561247 --name android-verification-20 --dir verification
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+      - name: Install packaging tools
+        run: sdkmanager 'build-tools;35.0.0'
+      - name: Verify APK, signature and test evidence
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging release-assets/app-debug.apk > apk-metadata.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs release-assets/app-debug.apk > apk-signature.txt
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,re,zipfile,xml.etree.ElementTree as ET,os
+          folder=Path('release-assets');apk=folder/'app-debug.apk'
+          digest=hashlib.sha256(apk.read_bytes()).hexdigest()
+          assert (folder/'app-debug.apk.sha256').read_text().split()[0]==digest
+          with zipfile.ZipFile(apk) as z: assert z.testzip() is None
+          metadata=Path('apk-metadata.txt').read_text()
+          assert "name='com.bandit.astro.preview'" in metadata
+          assert "versionName='1.1.0'" in metadata and "versionCode='5'" in metadata
+          assert "sdkVersion:'31'" in metadata
+          reports=list(Path('verification').rglob('testDebugUnitTest/index.html'))
+          assert len(reports)==1
+          html=reports[0].read_text()
+          def count(kind):
+              m=re.search(r'id="'+kind+r'"[\s\S]*?<div class="counter">\s*(\d+)\s*</div>',html)
+              assert m,kind
+              return int(m.group(1))
+          assert count('tests')>=20 and count('failures')==0 and count('ignored')==0
+          lint=list(Path('verification').rglob('lint-results-debug.xml'));assert len(lint)==1
+          issues=ET.parse(lint[0]).getroot().findall('issue')
+          assert not any(i.get('severity') in ('Error','Fatal') for i in issues)
+          named=folder/'Astro-1.1.0.apk';apk.rename(named)
+          named.with_suffix('.apk.sha256').write_text(digest+'  '+named.name+'\n')
+          evidence=f"\nSource: `{os.environ['SOURCE_SHA']}`\n\nUnit tests: {count('tests')} passed. Lint: zero errors. Android 12 device workflow passed.\n\nAPK size: {named.stat().st_size:,} bytes.\n\nSHA-256: `{digest}`\n"
+          with open('docs/releases/v1.1.0.md','a') as f:f.write(evidence)
+          print(evidence)
+          PY
+      - name: Publish regular release
+        run: |
+          gh release create v1.1.0 release-assets/Astro-1.1.0.apk release-assets/Astro-1.1.0.apk.sha256 \
+            --target "$SOURCE_SHA" --draft --title 'Astro 1.1 — A fuller orbit' --notes-file docs/releases/v1.1.0.md
+          gh release edit v1.1.0 --draft=false --prerelease=false --latest=true
+      - name: Preserve evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Astro-1.1.0-packaging-evidence
+          path: |
+            apk-metadata.txt
+            apk-signature.txt
+            build.json
+            device.json
+          retention-days: 14
