@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -121,7 +122,7 @@ import java.time.*
     AndroidView(
         modifier = modifier,
         factory = { context -> android.widget.TextView(context).apply {
-            setTextColor(androidx.compose.ui.graphics.toArgb(MaterialTheme.colorScheme.onSurfaceVariant))
+            setTextColor(MaterialTheme.colorScheme.onSurfaceVariant.toArgb())
             textSize = 14f
             movementMethod = LinkMovementMethod.getInstance()
             linksClickable = true
