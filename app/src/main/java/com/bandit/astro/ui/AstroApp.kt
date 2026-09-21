@@ -312,6 +312,8 @@ internal fun DetailScreen(state: DetailState, entry: LibraryEntry?, spoilerSafe:
                         Cover(character.image, character.name, Modifier.fillMaxWidth().height(170.dp).clickable { model.openPerson(character.id, false) })
                         Text(character.name, fontWeight = FontWeight.Bold, maxLines = 2, modifier = Modifier.clickable { model.openPerson(character.id, false) })
                         Text(character.role.pretty(), fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
+                        val dob = listOf(character.birthYear, character.birthMonth, character.birthDay).takeIf { it[0] > 0 }
+                        if (dob != null) Text("Born " + (dob[2].takeIf { it > 0 }?.toString()?.padStart(2, '0') ?: "??") + "/" + (dob[1].takeIf { it > 0 }?.toString()?.padStart(2, '0') ?: "??") + "/" + dob[0], fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                         if (character.actorId > 0) TextButton(onClick = { model.openPerson(character.actorId, true) }, contentPadding = PaddingValues(0.dp)) {
                             Text(character.actorName, fontWeight = FontWeight.Normal, fontSize = 12.sp, maxLines = 2)
                         }
