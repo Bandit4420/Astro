@@ -83,20 +83,37 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
         return Person(data.getJSONObject("name").text("full"), data.optJSONObject("image")?.text("large").orEmpty(), data.text("description"), data.getJSONObject(if (staff) "staffMedia" else "media").getJSONArray("nodes").objects().filterNot { it.optBoolean("isAdult") }.map(::parseMedia), page, data.getJSONObject(if (staff) "staffMedia" else "media").getJSONObject("pageInfo").optBoolean("hasNextPage"))
     }
     suspend fun schedule(from: Long, to: Long, page: Int = 1, ids: List<Int>? = null): Pair<List<Airing>, Boolean> {
-        val vars = JSONObject().put("from", from).put("to", to).put("page", page)
+        val variables = JSONObject().put("from", from).put("to", to).put("page", page)
             .put("ids", ids?.let { JSONArray(it) } ?: JSONObject.NULL)
-        val data = query("""query(${'$'}from:Int, ${'$'}to:Int, ${'$'}page:Int, ${'$'}ids:[Int]) {
-            Page(page:${'$'}page, perPage:50) { pageInfo { hasNextPage }
-                airingSchedules(airingAt_greater:${'$'}from, airingAt_lesser:${'$'}to, mediaId_in:${'$'}ids, sort:TIME) {
-                    id episode airingAt media { $MEDIA_FIELDS isAdult }
+        val data = query("""query($from:Int, $to:Int, $page:Int, $ids:[Int]) {
+            Page(page:$page, perPage:50) {
+                pageInfo { hasNextPage }
+                airingSchedules(
+                    airingAt_greater:$from,
+                    airingAt_lesser:$to,
+                    mediaId_in:$ids,
+                    sort:TIME
+                ) {
+                    id episode airingAt
+                    media {
+                        id idMal type format status episodes chapters duration averageScore
+                        title { userPreferred native }
+                        coverImage { large color }
+                        bannerImage
+                        startDate { year }
+                        nextAiringEpisode { episode airingAt }
+                        isAdult
+                    }
                 }
             }
-        }""", vars).getJSONObject("Page")
+        }""", variables).getJSONObject("Page")
         return data.getJSONArray("airingSchedules").objects().mapNotNull {
             val media = it.optJSONObject("media") ?: return@mapNotNull null
-            if (media.optBoolean("isAdult")) null else Airing(it.getInt("id"), it.getInt("episode"), it.getLong("airingAt"), parseMedia(media))
+            if (media.optBoolean("isAdult")) null
+            else Airing(it.getInt("id"), it.getInt("episode"), it.getLong("airingAt"), parseMedia(media))
         } to data.getJSONObject("pageInfo").optBoolean("hasNextPage")
     }
+
     companion object {
         internal const val MEDIA_FIELDS = """id idMal volumes studios(isMain:true) { nodes { name } } title { userPreferred native } coverImage { large color } bannerImage type format status
             description(asHtml:false) episodes chapters duration averageScore seasonYear startDate { year } genres
