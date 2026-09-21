@@ -17,7 +17,7 @@ data class RemoteEntry(val entryId: Int, val entry: LibraryEntry)
 suspend fun AniListApi.viewer(token: String): UserProfile = profile(token = token)
 suspend fun AniListApi.profile(name: String? = null, token: String? = null): UserProfile {
     val field = if (name == null) "Viewer" else "User(name:${'$'}name)"
-    val stats = "count meanScore standardDeviation minutesWatched episodesWatched chaptersRead volumesRead genres(limit:8,sort:COUNT_DESC) { genre count }"
+    val stats = "meanScore minutesWatched episodesWatched chaptersRead volumesRead genres { genre count }"
     val d = query("query${if(name == null) "" else "(${'$'}name:String)"} { $field { id name avatar { large } bannerImage about statistics { anime { $stats } manga { $stats } } } }",
         JSONObject().put("name", name), token).getJSONObject(if (name == null) "Viewer" else "User")
     return UserProfile(d.getInt("id"), d.text("name"), d.getJSONObject("avatar").text("large"), d.text("bannerImage"), d.text("about"),
