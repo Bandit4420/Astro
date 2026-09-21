@@ -3,6 +3,7 @@ package com.bandit.astro.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.text.method.LinkMovementMethod
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
@@ -22,6 +23,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.bandit.astro.*
@@ -115,13 +117,30 @@ import java.time.*
     val launcher=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/calendar")) {uri->if(uri!=null) scope.launch {try {withContext(Dispatchers.IO){context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use {it.write(calendarFile(rows))} ?: error("Could not open calendar file.")};m.announce("Calendar exported")}catch(e:Exception){m.announce(e.message ?: "Export failed")}}}
     TextButton(onClick={launcher.launch("Astro-schedule.ics")},enabled=rows.isNotEmpty()) {Text("Export this week's calendar")}
 }
-@Composable internal fun ExpandableDescription(value:String) {var expanded by rememberSaveable(value){mutableStateOf(false)};Column {SectionTitle("About this story");Text(plainText(value).ifBlank {"No description available yet."},maxLines=if(expanded) Int.MAX_VALUE else 5,color=MaterialTheme.colorScheme.onSurfaceVariant);TextButton(onClick={expanded=!expanded}) {Text(if(expanded) "Show less" else "Read more")}}}
+@Composable internal fun HtmlText(value:String, modifier:Modifier=Modifier, maxLines:Int=Int.MAX_VALUE) {
+    AndroidView(
+        modifier = modifier,
+        factory = { context -> android.widget.TextView(context).apply {
+            setTextColor(androidx.compose.ui.graphics.toArgb(MaterialTheme.colorScheme.onSurfaceVariant))
+            textSize = 14f
+            movementMethod = LinkMovementMethod.getInstance()
+            linksClickable = true
+        } },
+        update = { view ->
+            view.text = androidx.core.text.HtmlCompat.fromHtml(value.replace("<br>", "<br/>"), androidx.core.text.HtmlCompat.FROM_HTML_MODE_LEGACY)
+            view.maxLines = maxLines
+            view.ellipsize = if (maxLines == Int.MAX_VALUE) null else android.text.TextUtils.TruncateAt.END
+            view.movementMethod = LinkMovementMethod.getInstance()
+        }
+    )
+}
+@Composable internal fun ExpandableDescription(value:String) {var expanded by rememberSaveable(value){mutableStateOf(false)};Column {SectionTitle("About this story");if(value.isBlank()) Text("No description available yet.") else HtmlText(value,Modifier.fillMaxWidth(),if(expanded) Int.MAX_VALUE else 5);TextButton(onClick={expanded=!expanded}) {Text(if(expanded) "Show less" else "Read more")}}}
 @Composable internal fun RichAbout(value:String,revealSpoilers:Boolean=false) {
     val context=LocalContext.current
     Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
         profileParts(value,revealSpoilers).forEach {(type,content)->
             if(type=="image")AsyncImage(content,"Profile image",Modifier.fillMaxWidth().heightIn(max=400.dp).clickable {openLink(context,content)})
-            else if(content.isNotBlank())Text(plainText(content),lineHeight=23.sp)
+            else if(content.isNotBlank())HtmlText(content,Modifier.fillMaxWidth())
         }
         if(value.isBlank())Text("No biography listed yet.")
     }
