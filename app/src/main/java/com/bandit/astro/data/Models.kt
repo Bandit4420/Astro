@@ -16,7 +16,9 @@ data class Media(
 ) { val unit: String get() = if (type == "ANIME") "episode" else "chapter" }
 
 data class CastMember(val id: Int, val name: String, val image: String, val role: String,
-    val actorName: String, val actorId: Int, val actorImage: String)
+    val actorName: String, val actorId: Int, val actorImage: String,
+    val birthYear: Int = 0, val birthMonth: Int = 0, val birthDay: Int = 0,
+    val description: String = "")
 data class Credit(val id: Int, val name: String, val image: String, val role: String)
 data class Relation(val media: Media, val relation: String)
 data class MediaDetail(val media: Media, val characters: List<CastMember>, val castPage: Int = 1,
