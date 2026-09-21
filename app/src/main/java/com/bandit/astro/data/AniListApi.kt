@@ -56,7 +56,7 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
     }
     suspend fun detail(id: Int): MediaDetail {
         val data = query("""query(${'$'}id:Int) { Media(id:${'$'}id) { $MEDIA_FIELDS
-            characters(sort:[ROLE,RELEVANCE,ID], perPage:25) { pageInfo { hasNextPage } edges { role node { id name { full } image { large } }
+            characters(sort:[ROLE,RELEVANCE,ID], perPage:25) { pageInfo { hasNextPage } edges { role node { id name { full } image { large } dateOfBirth { year month day } description }
                 voiceActors(language:JAPANESE, sort:RELEVANCE) { id name { full } image { large } } } }
             staff(perPage:25) { edges { role node { id name { full } image { large } } } }
             relations { edges { relationType node { $MEDIA_FIELDS isAdult } } }
@@ -67,7 +67,9 @@ class AniListApi(private val client: OkHttpClient, private val endpoint: String 
             val actor = edge.optJSONArray("voiceActors")?.optJSONObject(0)
             CastMember(node.getInt("id"), node.getJSONObject("name").text("full"), node.optJSONObject("image")?.text("large").orEmpty(),
                 edge.text("role"), actor?.optJSONObject("name")?.text("full").orEmpty(), actor?.optInt("id") ?: 0,
-                actor?.optJSONObject("image")?.text("large").orEmpty())
+                actor?.optJSONObject("image")?.text("large").orEmpty(),
+                node.optJSONObject("dateOfBirth")?.optInt("year") ?: 0, node.optJSONObject("dateOfBirth")?.optInt("month") ?: 0,
+                node.optJSONObject("dateOfBirth")?.optInt("day") ?: 0, node.text("description"))
         }.orEmpty()
         return MediaDetail(parseMedia(data), characters, moreCast = data.getJSONObject("characters").getJSONObject("pageInfo").optBoolean("hasNextPage"),
             staff = data.optJSONObject("staff")?.optJSONArray("edges")?.objects()?.map { e -> val n=e.getJSONObject("node"); Credit(n.getInt("id"),n.getJSONObject("name").text("full"),n.optJSONObject("image")?.text("large").orEmpty(), e.text("role")) }.orEmpty(),
