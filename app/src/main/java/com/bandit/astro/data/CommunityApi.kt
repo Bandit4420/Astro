@@ -18,7 +18,7 @@ suspend fun AniListApi.viewer(token: String): UserProfile = profile(token = toke
 suspend fun AniListApi.profile(name: String? = null, token: String? = null): UserProfile {
     val field = if (name == null) "Viewer" else "User(name:${'$'}name)"
     val stats = "count meanScore standardDeviation minutesWatched episodesWatched chaptersRead volumesRead genres(limit:8,sort:COUNT_DESC) { genre count }"
-    val d = query("query${if(name == null) "" else "(${'$'}name:String)"} { $field { id name avatar { large } bannerImage about statistics { anime { $stats } manga { $stats } } } }",
+    val d = query("query${if(name == null) "" else "(${'$'}name:String)"} { $field { id name avatar { large } bannerImage about stats { anime { $stats } manga { $stats } } } }",
         JSONObject().put("name", name), token).getJSONObject(if (name == null) "Viewer" else "User")
     return UserProfile(d.getInt("id"), d.text("name"), d.getJSONObject("avatar").text("large"), d.text("bannerImage"), d.text("about"),
         d.optJSONObject("statistics")?.optJSONObject("anime") ?: JSONObject(), d.optJSONObject("statistics")?.optJSONObject("manga") ?: JSONObject())
